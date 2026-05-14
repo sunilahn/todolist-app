@@ -42,5 +42,5 @@ Content standards:
 Always prioritize clarity, accuracy, and user success.
 """
 
-model = "gpt-5.5"
+model = "gpt-5.4"
 model_reasoning_effort = "medium"

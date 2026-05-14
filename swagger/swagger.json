@@ -1,620 +1,486 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Todolist-App API",
+    "title": "Todolist App API",
     "version": "1.0.0",
-    "description": "Todolist-App REST API 명세서입니다. JWT Bearer 인증을 사용하며, 개인 할일 관리 및 팀 협업 기능을 제공합니다.\n\n## 인증\n모든 인증 필요 엔드포인트는 `Authorization: Bearer <access_token>` 헤더를 포함해야 합니다.\n\n## 오류 응답 형식\n모든 오류 응답은 다음 형식을 따릅니다:\n```json\n{\"code\": \"ERROR_CODE\", \"message\": \"오류 설명\"}\n```\n\n## 날짜 형식\n- 날짜: `YYYY-MM-DD`\n- 일시: ISO 8601 (`2026-05-13T09:00:00+09:00`)\n- 날짜 기반 조회(오늘/이번 주)는 KST(UTC+9) 기준으로 처리됩니다."
+    "description": "Actual REST API contract for the current backend implementation."
   },
   "servers": [
     {
       "url": "http://localhost:3000",
-      "description": "개발 서버"
+      "description": "Local development server"
     }
   ],
   "tags": [
-    { "name": "Auth", "description": "인증 및 계정 관리 (회원가입, 로그인, 토큰 갱신, 비밀번호 재설정)" },
-    { "name": "User", "description": "내 계정 정보 조회·수정·탈퇴" },
-    { "name": "Todo", "description": "개인 할일 CRUD 및 상태 관리" },
-    { "name": "Category", "description": "할일 분류 카테고리 관리" },
-    { "name": "Team", "description": "팀 생성·관리, 멤버 초대·역할 변경, 팀 할일 조회" },
-    { "name": "Notification", "description": "인앱 알림 조회 및 읽음 처리" }
+    { "name": "Health" },
+    { "name": "Auth" },
+    { "name": "Users" },
+    { "name": "Todos" },
+    { "name": "Categories" },
+    { "name": "Teams" },
+    { "name": "Notifications" }
   ],
   "components": {
     "securitySchemes": {
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "JWT",
-        "description": "JWT 액세스 토큰. 유효 시간: 1시간"
+        "bearerFormat": "JWT"
       }
     },
     "schemas": {
-      "Todo": {
-        "type": "object",
-        "description": "할일 객체",
-        "properties": {
-          "todo_id": { "type": "string", "format": "uuid", "example": "d290f1ee-6c54-4b01-90e6-d701748f0851" },
-          "user_id": { "type": "string", "format": "uuid", "nullable": true, "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890" },
-          "team_id": { "type": "string", "format": "uuid", "nullable": true, "example": null },
-          "category_id": { "type": "string", "format": "uuid", "nullable": true, "example": "c9d8e7f6-a5b4-3c2d-1e0f-9a8b7c6d5e4f" },
-          "title": { "type": "string", "maxLength": 500, "example": "API 명세서 작성" },
-          "description": { "type": "string", "nullable": true, "example": "OpenAPI 3.0.3 형식으로 작성" },
-          "status": { "$ref": "#/components/schemas/TodoStatus" },
-          "start_date": { "type": "string", "format": "date", "nullable": true, "example": "2026-05-13" },
-          "due_date": { "type": "string", "format": "date", "nullable": true, "example": "2026-05-20" },
-          "created_at": { "type": "string", "format": "date-time", "example": "2026-05-13T09:00:00+09:00" },
-          "updated_at": { "type": "string", "format": "date-time", "example": "2026-05-13T09:00:00+09:00" }
-        },
-        "required": ["todo_id", "title", "status", "created_at", "updated_at"]
-      },
-      "TodoStatus": {
-        "type": "string",
-        "enum": ["PLANNED", "IN_PROGRESS", "DONE", "ON_HOLD"],
-        "description": "할일 진행 상태. 허용 전이: PLANNED→IN_PROGRESS|ON_HOLD, IN_PROGRESS→DONE|ON_HOLD, DONE→IN_PROGRESS, ON_HOLD→PLANNED|IN_PROGRESS",
-        "example": "PLANNED"
-      },
-      "Category": {
-        "type": "object",
-        "description": "카테고리 객체",
-        "properties": {
-          "category_id": { "type": "string", "format": "uuid", "example": "c9d8e7f6-a5b4-3c2d-1e0f-9a8b7c6d5e4f" },
-          "owner_id": { "type": "string", "format": "uuid", "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890" },
-          "owner_type": { "type": "string", "enum": ["USER", "TEAM"], "example": "USER" },
-          "name": { "type": "string", "maxLength": 100, "example": "업무" },
-          "color": { "type": "string", "nullable": true, "pattern": "^#[0-9A-Fa-f]{6}$", "example": "#3B82F6" },
-          "created_at": { "type": "string", "format": "date-time", "example": "2026-05-13T09:00:00+09:00" }
-        },
-        "required": ["category_id", "owner_id", "owner_type", "name", "created_at"]
-      },
-      "Team": {
-        "type": "object",
-        "description": "팀 객체",
-        "properties": {
-          "team_id": { "type": "string", "format": "uuid", "example": "f47ac10b-58cc-4372-a567-0e02b2c3d479" },
-          "name": { "type": "string", "maxLength": 100, "example": "백엔드 개발팀" },
-          "description": { "type": "string", "nullable": true, "example": "Node.js 백엔드 개발 담당 팀" },
-          "created_by": { "type": "string", "format": "uuid", "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890" },
-          "created_at": { "type": "string", "format": "date-time", "example": "2026-05-01T09:00:00+09:00" },
-          "updated_at": { "type": "string", "format": "date-time", "example": "2026-05-13T09:00:00+09:00" },
-          "my_role": { "type": "string", "enum": ["ADMIN", "MEMBER", "VIEWER"], "example": "ADMIN" },
-          "member_count": { "type": "integer", "example": 5 }
-        },
-        "required": ["team_id", "name", "created_by", "created_at", "updated_at", "my_role", "member_count"]
-      },
-      "TeamMember": {
-        "type": "object",
-        "description": "팀 멤버 객체",
-        "properties": {
-          "team_member_id": { "type": "string", "format": "uuid", "example": "b5d1e8a2-c3f4-4567-89ab-cdef01234567" },
-          "team_id": { "type": "string", "format": "uuid", "example": "f47ac10b-58cc-4372-a567-0e02b2c3d479" },
-          "user_id": { "type": "string", "format": "uuid", "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890" },
-          "name": { "type": "string", "example": "홍길동" },
-          "email": { "type": "string", "format": "email", "example": "hong@example.com" },
-          "role": { "type": "string", "enum": ["ADMIN", "MEMBER", "VIEWER"], "example": "ADMIN" },
-          "joined_at": { "type": "string", "format": "date-time", "example": "2026-05-01T09:00:00+09:00" }
-        },
-        "required": ["team_member_id", "team_id", "user_id", "name", "email", "role", "joined_at"]
-      },
-      "Notification": {
-        "type": "object",
-        "description": "알림 객체",
-        "properties": {
-          "notification_id": { "type": "string", "format": "uuid", "example": "e7f8a9b0-c1d2-3456-789a-bcdef0123456" },
-          "user_id": { "type": "string", "format": "uuid", "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890" },
-          "type": { "type": "string", "enum": ["DUE_DATE_REMINDER", "TEAM_INVITE", "TODO_ASSIGNED"], "example": "TEAM_INVITE" },
-          "message": { "type": "string", "example": "백엔드 개발팀에 초대되었습니다.", "description": "알림 본문 내용" },
-          "reference_id": { "type": "string", "format": "uuid", "nullable": true, "example": "f1e2d3c4-b5a6-7890-abcd-ef0123456789" },
-          "is_read": { "type": "boolean", "example": false },
-          "created_at": { "type": "string", "format": "date-time", "example": "2026-05-13T09:00:00+09:00" }
-        },
-        "required": ["notification_id", "user_id", "type", "message", "is_read", "created_at"]
-      },
-      "User": {
-        "type": "object",
-        "description": "사용자 계정 객체 (비밀번호 해시 미포함)",
-        "properties": {
-          "user_id": { "type": "string", "format": "uuid", "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890" },
-          "email": { "type": "string", "format": "email", "example": "hong@example.com" },
-          "name": { "type": "string", "maxLength": 100, "example": "홍길동" },
-          "created_at": { "type": "string", "format": "date-time", "example": "2026-05-01T09:00:00+09:00" },
-          "updated_at": { "type": "string", "format": "date-time", "example": "2026-05-13T09:00:00+09:00" }
-        },
-        "required": ["user_id", "email", "name", "created_at", "updated_at"]
-      },
       "ErrorResponse": {
         "type": "object",
-        "description": "공통 오류 응답 형식",
         "properties": {
-          "code": { "type": "string", "example": "VALIDATION_ERROR", "description": "오류 코드" },
-          "message": { "type": "string", "example": "입력값이 올바르지 않습니다.", "description": "오류 설명 (한국어)" }
+          "code": { "type": "string", "example": "VALIDATION_ERROR" },
+          "message": { "type": "string", "example": "Invalid request." },
+          "details": {
+            "type": "array",
+            "items": { "type": "object", "additionalProperties": true }
+          }
         },
         "required": ["code", "message"]
       },
-      "PaginatedTodos": {
+      "HealthResponse": {
         "type": "object",
         "properties": {
-          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Todo" } },
-          "total": { "type": "integer", "example": 42, "description": "전체 할일 수" },
-          "page": { "type": "integer", "example": 1, "description": "현재 페이지" },
-          "limit": { "type": "integer", "example": 20, "description": "페이지당 항목 수" }
+          "status": { "type": "string", "example": "ok" },
+          "db": { "type": "string", "example": "ok" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "env": { "type": "string", "example": "development" }
         },
-        "required": ["data", "total", "page", "limit"]
+        "required": ["status", "db", "timestamp", "env"]
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "name": { "type": "string", "maxLength": 100 },
+          "password": { "type": "string", "minLength": 8 }
+        },
+        "required": ["email", "name", "password"]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string" }
+        },
+        "required": ["email", "password"]
+      },
+      "RefreshTokenRequest": {
+        "type": "object",
+        "properties": {
+          "refreshToken": { "type": "string" }
+        },
+        "required": ["refreshToken"]
+      },
+      "PasswordResetRequest": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "format": "email" }
+        },
+        "required": ["email"]
+      },
+      "PasswordResetConfirmRequest": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string" },
+          "newPassword": { "type": "string", "minLength": 8 }
+        },
+        "required": ["token", "newPassword"]
+      },
+      "AuthTokens": {
+        "type": "object",
+        "properties": {
+          "accessToken": { "type": "string" },
+          "refreshToken": { "type": "string" }
+        },
+        "required": ["accessToken", "refreshToken"]
+      },
+      "AccessTokenResponse": {
+        "type": "object",
+        "properties": {
+          "accessToken": { "type": "string" }
+        },
+        "required": ["accessToken"]
+      },
+      "MessageResponse": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string" }
+        },
+        "required": ["message"]
+      },
+      "UserProfile": {
+        "type": "object",
+        "properties": {
+          "userId": { "type": "string", "format": "uuid" },
+          "email": { "type": "string", "format": "email" },
+          "name": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["userId", "email", "name", "createdAt", "updatedAt"]
+      },
+      "TodoStatus": {
+        "type": "string",
+        "enum": ["PLANNED", "IN_PROGRESS", "DONE", "ON_HOLD"]
+      },
+      "Todo": {
+        "type": "object",
+        "properties": {
+          "todoId": { "type": "string", "format": "uuid" },
+          "userId": { "type": "string", "format": "uuid", "nullable": true },
+          "teamId": { "type": "string", "format": "uuid", "nullable": true },
+          "categoryId": { "type": "string", "format": "uuid", "nullable": true },
+          "title": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "status": { "$ref": "#/components/schemas/TodoStatus" },
+          "startDate": { "type": "string", "format": "date-time", "nullable": true },
+          "dueDate": { "type": "string", "format": "date-time", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["todoId", "title", "status", "createdAt", "updatedAt"]
+      },
+      "TodoCreateRequest": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "maxLength": 500 },
+          "description": { "type": "string" },
+          "status": { "$ref": "#/components/schemas/TodoStatus" },
+          "startDate": { "type": "string", "format": "date" },
+          "dueDate": { "type": "string", "format": "date" },
+          "categoryId": { "type": "string", "format": "uuid", "nullable": true },
+          "teamId": { "type": "string", "format": "uuid", "nullable": true }
+        },
+        "required": ["title"]
+      },
+      "TodoUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "maxLength": 500 },
+          "description": { "type": "string" },
+          "status": { "$ref": "#/components/schemas/TodoStatus" },
+          "startDate": { "type": "string", "format": "date", "nullable": true },
+          "dueDate": { "type": "string", "format": "date", "nullable": true },
+          "categoryId": { "type": "string", "format": "uuid", "nullable": true }
+        }
+      },
+      "TodoStatusUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "status": { "$ref": "#/components/schemas/TodoStatus" }
+        },
+        "required": ["status"]
       },
       "TodoListResponse": {
         "type": "object",
         "properties": {
-          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Todo" } }
+          "todos": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Todo" }
+          },
+          "total": { "type": "integer" },
+          "page": { "type": "integer" },
+          "limit": { "type": "integer" }
         },
-        "required": ["data"]
+        "required": ["todos", "total", "page", "limit"]
       },
-      "CategoryListResponse": {
+      "Category": {
         "type": "object",
         "properties": {
-          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Category" } }
+          "categoryId": { "type": "string", "format": "uuid" },
+          "ownerId": { "type": "string", "format": "uuid" },
+          "ownerType": { "type": "string", "enum": ["USER", "TEAM"] },
+          "name": { "type": "string" },
+          "color": { "type": "string", "nullable": true, "pattern": "^#[0-9A-Fa-f]{6}$" },
+          "createdAt": { "type": "string", "format": "date-time" }
         },
-        "required": ["data"]
+        "required": ["categoryId", "ownerId", "ownerType", "name", "createdAt"]
       },
-      "TeamListResponse": {
+      "CategoryCreateRequest": {
         "type": "object",
         "properties": {
-          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Team" } }
+          "name": { "type": "string", "maxLength": 100 },
+          "color": { "type": "string", "nullable": true, "pattern": "^#[0-9A-Fa-f]{6}$" },
+          "teamId": { "type": "string", "format": "uuid", "nullable": true }
         },
-        "required": ["data"]
+        "required": ["name"]
       },
-      "TeamMemberListResponse": {
+      "CategoryUpdateRequest": {
         "type": "object",
         "properties": {
-          "data": { "type": "array", "items": { "$ref": "#/components/schemas/TeamMember" } }
-        },
-        "required": ["data"]
+          "name": { "type": "string", "maxLength": 100 },
+          "color": { "type": "string", "nullable": true, "pattern": "^#[0-9A-Fa-f]{6}$" }
+        }
       },
-      "NotificationListResponse": {
+      "Team": {
         "type": "object",
         "properties": {
-          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Notification" } },
-          "unread_count": { "type": "integer", "example": 3, "description": "읽지 않은 알림 수" }
+          "teamId": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "createdBy": { "type": "string", "format": "uuid" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
         },
-        "required": ["data", "unread_count"]
-      }
-    },
-    "responses": {
-      "Unauthorized": {
-        "description": "인증 실패 또는 액세스 토큰 만료",
-        "content": {
-          "application/json": {
-            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-            "examples": {
-              "token_expired": {
-                "summary": "액세스 토큰 만료",
-                "value": { "code": "TOKEN_EXPIRED", "message": "액세스 토큰이 만료되었습니다. 토큰을 갱신해 주세요." }
-              },
-              "invalid_token": {
-                "summary": "유효하지 않은 토큰",
-                "value": { "code": "INVALID_TOKEN", "message": "유효하지 않은 인증 토큰입니다." }
-              },
-              "missing_token": {
-                "summary": "토큰 없음",
-                "value": { "code": "MISSING_TOKEN", "message": "Authorization 헤더가 없습니다." }
-              }
-            }
-          }
-        }
+        "required": ["teamId", "name", "createdBy", "createdAt", "updatedAt"]
       },
-      "Forbidden": {
-        "description": "권한 없음",
-        "content": {
-          "application/json": {
-            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-            "example": { "code": "FORBIDDEN", "message": "이 리소스에 접근할 권한이 없습니다." }
-          }
-        }
+      "TeamRequest": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "maxLength": 100 }
+        },
+        "required": ["name"]
       },
-      "NotFound": {
-        "description": "리소스를 찾을 수 없음",
-        "content": {
-          "application/json": {
-            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-            "example": { "code": "NOT_FOUND", "message": "요청한 리소스를 찾을 수 없습니다." }
-          }
-        }
+      "TeamMember": {
+        "type": "object",
+        "properties": {
+          "teamMemberId": { "type": "string", "format": "uuid" },
+          "teamId": { "type": "string", "format": "uuid" },
+          "userId": { "type": "string", "format": "uuid" },
+          "role": { "type": "string", "enum": ["ADMIN", "MEMBER", "VIEWER"] },
+          "joinedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["teamMemberId", "teamId", "userId", "role", "joinedAt"]
       },
-      "BadRequest": {
-        "description": "입력값 오류",
-        "content": {
-          "application/json": {
-            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-            "example": { "code": "VALIDATION_ERROR", "message": "입력값이 올바르지 않습니다." }
-          }
-        }
+      "TeamInvitation": {
+        "type": "object",
+        "properties": {
+          "invitationId": { "type": "string", "format": "uuid" },
+          "teamId": { "type": "string", "format": "uuid" },
+          "invitedUserId": { "type": "string", "format": "uuid" },
+          "invitedBy": { "type": "string", "format": "uuid" },
+          "role": { "type": "string", "enum": ["MEMBER", "VIEWER"] },
+          "status": { "type": "string", "enum": ["PENDING", "ACCEPTED", "DECLINED", "EXPIRED"] },
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "respondedAt": { "type": "string", "format": "date-time", "nullable": true }
+        },
+        "required": ["invitationId", "teamId", "invitedUserId", "invitedBy", "role", "status", "expiresAt", "createdAt"]
       },
-      "Conflict": {
-        "description": "중복 데이터",
-        "content": {
-          "application/json": {
-            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-            "example": { "code": "DUPLICATE_RESOURCE", "message": "이미 존재하는 데이터입니다." }
-          }
-        }
+      "TeamInvitationCreateRequest": {
+        "type": "object",
+        "properties": {
+          "invitedUserId": { "type": "string", "format": "uuid" },
+          "role": { "type": "string", "enum": ["MEMBER", "VIEWER"] }
+        },
+        "required": ["invitedUserId", "role"]
       },
-      "UnprocessableEntity": {
-        "description": "비즈니스 규칙 위반",
-        "content": {
-          "application/json": {
-            "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-            "example": { "code": "BUSINESS_RULE_VIOLATION", "message": "비즈니스 규칙을 위반하였습니다." }
-          }
-        }
+      "TeamRoleUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "role": { "type": "string", "enum": ["ADMIN", "MEMBER", "VIEWER"] }
+        },
+        "required": ["role"]
       },
-      "NoContent": {
-        "description": "성공 (응답 본문 없음)"
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "notificationId": { "type": "string", "format": "uuid" },
+          "userId": { "type": "string", "format": "uuid" },
+          "type": { "type": "string", "enum": ["DUE_DATE_REMINDER", "TEAM_INVITE", "TODO_ASSIGNED"] },
+          "message": { "type": "string" },
+          "referenceId": { "type": "string", "format": "uuid", "nullable": true },
+          "isRead": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["notificationId", "userId", "type", "message", "isRead", "createdAt"]
       }
     }
   },
+  "security": [
+    { "bearerAuth": [] }
+  ],
   "paths": {
-    "/auth/check-email": {
+    "/health": {
       "get": {
-        "tags": ["Auth"],
-        "summary": "이메일 중복 확인",
-        "description": "회원가입 전 입력한 이메일의 중복 여부를 확인합니다 (UC-A02, USR-001).",
-        "operationId": "checkEmail",
-        "parameters": [
-          {
-            "name": "email",
-            "in": "query",
-            "required": true,
-            "description": "확인할 이메일 주소",
-            "schema": { "type": "string", "format": "email", "example": "hong@example.com" }
-          }
-        ],
+        "tags": ["Health"],
+        "security": [],
+        "summary": "Health check",
         "responses": {
           "200": {
-            "description": "사용 가능한 이메일",
+            "description": "Healthy",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "available": { "type": "boolean", "example": true, "description": "사용 가능 여부" },
-                    "message": { "type": "string", "example": "사용 가능한 이메일입니다." }
-                  },
-                  "required": ["available", "message"]
-                }
+                "schema": { "$ref": "#/components/schemas/HealthResponse" }
               }
             }
           },
-          "409": {
-            "description": "이미 사용 중인 이메일 (USR-001)",
+          "503": {
+            "description": "Degraded",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "USR-001", "message": "이미 사용 중인 이메일입니다." }
+                "schema": { "$ref": "#/components/schemas/HealthResponse" }
               }
             }
           }
         }
       }
     },
-    "/auth/register": {
+    "/api/auth/register": {
       "post": {
         "tags": ["Auth"],
-        "summary": "회원가입",
-        "description": "신규 사용자를 등록합니다. 가입 성공 시 기본 카테고리 6종(업무, 개인, 학습, 회의, 프로젝트, 긴급 업무)이 자동 생성됩니다 (CAT-003).\n\n**이메일**: 시스템 전체에서 유일해야 합니다 (USR-001).\n\n**비밀번호 정책 (USR-002)**: 최소 8자, 영문자·숫자·특수문자 각 1자 이상 포함.",
-        "operationId": "register",
+        "security": [],
+        "summary": "Register user",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["email", "password", "name"],
-                "properties": {
-                  "email": { "type": "string", "format": "email", "example": "hong@example.com", "description": "로그인 이메일 (시스템 전체 유일, USR-001)" },
-                  "password": { "type": "string", "minLength": 8, "example": "P@ssw0rd!", "description": "비밀번호. 최소 8자, 영문자·숫자·특수문자 각 1자 이상 포함 (USR-002)" },
-                  "name": { "type": "string", "maxLength": 100, "example": "홍길동", "description": "사용자 이름" }
-                }
-              }
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" }
             }
           }
         },
         "responses": {
           "201": {
-            "description": "회원가입 성공. 기본 카테고리 6종 자동 생성됨 (CAT-003)",
+            "description": "Created",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "user_id": { "type": "string", "format": "uuid", "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890" },
-                    "email": { "type": "string", "format": "email", "example": "hong@example.com" },
-                    "name": { "type": "string", "example": "홍길동" },
-                    "created_at": { "type": "string", "format": "date-time", "example": "2026-05-13T09:00:00+09:00" }
-                  },
-                  "required": ["user_id", "email", "name", "created_at"]
-                }
+                "schema": { "$ref": "#/components/schemas/UserProfile" }
               }
             }
           },
-          "400": {
-            "description": "입력값 오류 (이메일 형식 불일치, 비밀번호 정책 위반 등)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "examples": {
-                  "invalid_email": {
-                    "summary": "이메일 형식 오류",
-                    "value": { "code": "VALIDATION_ERROR", "message": "올바른 이메일 형식을 입력해 주세요." }
-                  },
-                  "weak_password": {
-                    "summary": "비밀번호 정책 위반 (USR-002)",
-                    "value": { "code": "USR-002", "message": "비밀번호는 최소 8자이며 영문자, 숫자, 특수문자를 각 1자 이상 포함해야 합니다." }
-                  }
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "이메일 중복 (USR-001)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "USR-001", "message": "이미 사용 중인 이메일입니다." }
-              }
-            }
-          }
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "409": { "description": "Email already exists", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/auth/login": {
+    "/api/auth/login": {
       "post": {
         "tags": ["Auth"],
-        "summary": "로그인",
-        "description": "이메일과 비밀번호로 인증하여 JWT 액세스 토큰과 리프레시 토큰을 발급합니다.\n\n- 액세스 토큰 유효 기간: **1시간**\n- 리프레시 토큰 유효 기간: **7일** (AUTH-006)",
-        "operationId": "login",
+        "security": [],
+        "summary": "Login",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["email", "password"],
-                "properties": {
-                  "email": { "type": "string", "format": "email", "example": "hong@example.com" },
-                  "password": { "type": "string", "example": "P@ssw0rd!" }
-                }
-              }
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "로그인 성공",
+            "description": "Authenticated",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "access_token": { "type": "string", "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiYTFiMmMzZDQtZTVmNi03ODkwLWFiY2QtZWYxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c", "description": "JWT 액세스 토큰 (유효 기간: 1시간)" },
-                    "refresh_token": { "type": "string", "example": "dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4gZXhhbXBsZQ==", "description": "리프레시 토큰 (유효 기간: 7일)" },
-                    "token_type": { "type": "string", "enum": ["Bearer"], "example": "Bearer" },
-                    "expires_in": { "type": "integer", "example": 3600, "description": "액세스 토큰 만료 시간 (초)" }
-                  },
-                  "required": ["access_token", "refresh_token", "token_type", "expires_in"]
-                }
+                "schema": { "$ref": "#/components/schemas/AuthTokens" }
               }
             }
           },
-          "401": {
-            "description": "이메일 또는 비밀번호 불일치",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "INVALID_CREDENTIALS", "message": "이메일 또는 비밀번호가 올바르지 않습니다." }
-              }
-            }
-          }
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/auth/logout": {
+    "/api/auth/logout": {
       "post": {
         "tags": ["Auth"],
-        "summary": "로그아웃",
-        "description": "현재 사용 중인 리프레시 토큰을 즉시 무효화합니다 (`revoked_at` 설정). 이후 해당 리프레시 토큰으로 액세스 토큰 갱신이 불가합니다.",
-        "operationId": "logout",
-        "security": [{ "bearerAuth": [] }],
+        "summary": "Logout",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RefreshTokenRequest" }
+            }
+          }
+        },
         "responses": {
-          "204": { "$ref": "#/components/responses/NoContent" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "204": { "description": "Logged out" },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/auth/refresh": {
+    "/api/auth/refresh": {
       "post": {
         "tags": ["Auth"],
-        "summary": "액세스 토큰 갱신",
-        "description": "유효한 리프레시 토큰을 사용하여 새로운 액세스 토큰을 발급합니다. 만료되거나 폐기된 리프레시 토큰은 사용할 수 없습니다.",
-        "operationId": "refreshToken",
+        "security": [],
+        "summary": "Refresh access token",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["refresh_token"],
-                "properties": {
-                  "refresh_token": { "type": "string", "example": "dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4gZXhhbXBsZQ==", "description": "유효한 리프레시 토큰" }
-                }
-              }
+              "schema": { "$ref": "#/components/schemas/RefreshTokenRequest" }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "액세스 토큰 갱신 성공",
+            "description": "Refreshed",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "access_token": { "type": "string", "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.new.token" },
-                    "token_type": { "type": "string", "enum": ["Bearer"], "example": "Bearer" },
-                    "expires_in": { "type": "integer", "example": 3600 }
-                  },
-                  "required": ["access_token", "token_type", "expires_in"]
-                }
+                "schema": { "$ref": "#/components/schemas/AccessTokenResponse" }
               }
             }
           },
-          "401": {
-            "description": "리프레시 토큰 만료 또는 폐기됨",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "examples": {
-                  "expired": {
-                    "summary": "리프레시 토큰 만료",
-                    "value": { "code": "REFRESH_TOKEN_EXPIRED", "message": "리프레시 토큰이 만료되었습니다. 다시 로그인해 주세요." }
-                  },
-                  "revoked": {
-                    "summary": "리프레시 토큰 폐기됨",
-                    "value": { "code": "REFRESH_TOKEN_REVOKED", "message": "이미 폐기된 리프레시 토큰입니다." }
-                  }
-                }
-              }
-            }
-          }
+          "401": { "description": "Invalid refresh token", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/auth/password-reset/request": {
+    "/api/auth/password-reset/request": {
       "post": {
         "tags": ["Auth"],
-        "summary": "비밀번호 재설정 요청",
-        "description": "입력한 이메일로 비밀번호 재설정 링크를 발송합니다. 링크는 발송 후 **30분** 이내에만 유효합니다 (USR-005).\n\n보안상 이메일 존재 여부와 관계없이 동일한 성공 응답을 반환합니다.",
-        "operationId": "requestPasswordReset",
+        "security": [],
+        "summary": "Request password reset",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["email"],
-                "properties": {
-                  "email": { "type": "string", "format": "email", "example": "hong@example.com" }
-                }
-              }
+              "schema": { "$ref": "#/components/schemas/PasswordResetRequest" }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "요청 처리 완료 (이메일 존재 여부와 관계없이 동일 응답 반환)",
+            "description": "Request accepted",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": { "type": "string", "example": "비밀번호 재설정 링크가 이메일로 발송되었습니다. 30분 이내에 사용해 주세요." }
-                  },
-                  "required": ["message"]
-                }
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
               }
             }
-          }
+          },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/auth/password-reset/confirm": {
+    "/api/auth/password-reset/confirm": {
       "post": {
         "tags": ["Auth"],
-        "summary": "비밀번호 재설정 확인",
-        "description": "이메일로 발송된 재설정 토큰과 새 비밀번호를 사용하여 비밀번호를 변경합니다.\n\n- 토큰 유효 시간: 30분 (USR-005)\n- 이미 사용된 토큰 재사용 불가",
-        "operationId": "confirmPasswordReset",
+        "security": [],
+        "summary": "Confirm password reset",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["token", "new_password"],
-                "properties": {
-                  "token": { "type": "string", "example": "eyJhbGciOiJIUzI1NiJ9.reset.token", "description": "이메일로 수신한 재설정 토큰" },
-                  "new_password": { "type": "string", "minLength": 8, "example": "NewP@ssw0rd!", "description": "새 비밀번호. 정책: 최소 8자, 영문자·숫자·특수문자 각 1자 이상 (USR-002)" }
-                }
-              }
+              "schema": { "$ref": "#/components/schemas/PasswordResetConfirmRequest" }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "비밀번호 재설정 성공",
+            "description": "Password updated",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": { "type": "string", "example": "비밀번호가 성공적으로 변경되었습니다." }
-                  },
-                  "required": ["message"]
-                }
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
               }
             }
           },
-          "400": {
-            "description": "비밀번호 정책 위반 (USR-002)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "USR-002", "message": "비밀번호는 최소 8자이며 영문자, 숫자, 특수문자를 각 1자 이상 포함해야 합니다." }
-              }
-            }
-          },
-          "422": {
-            "description": "토큰 만료 또는 이미 사용된 토큰",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "examples": {
-                  "expired": {
-                    "summary": "토큰 만료",
-                    "value": { "code": "USR-005", "message": "비밀번호 재설정 링크가 만료되었습니다. 재설정을 다시 요청해 주세요." }
-                  },
-                  "used": {
-                    "summary": "이미 사용된 토큰",
-                    "value": { "code": "RESET_TOKEN_USED", "message": "이미 사용된 재설정 링크입니다." }
-                  }
-                }
-              }
-            }
-          }
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "422": { "description": "Invalid reset token", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/users/me": {
+    "/api/users/me": {
       "get": {
-        "tags": ["User"],
-        "summary": "내 정보 조회",
-        "description": "현재 인증된 사용자의 프로필 정보를 반환합니다. 비밀번호 해시는 포함되지 않습니다.",
-        "operationId": "getMe",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Users"],
+        "summary": "Get current user",
         "responses": {
-          "200": {
-            "description": "내 정보 조회 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/User" }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "200": { "description": "Current user", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserProfile" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       },
       "patch": {
-        "tags": ["User"],
-        "summary": "내 정보 수정",
-        "description": "현재 인증된 사용자의 프로필 정보를 부분 수정합니다. 현재 수정 가능한 필드: `name`",
-        "operationId": "updateMe",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Users"],
+        "summary": "Update current user",
         "requestBody": {
           "required": true,
           "content": {
@@ -622,1151 +488,486 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "name": { "type": "string", "maxLength": 100, "example": "홍길동(수정)", "description": "변경할 이름" }
-                },
-                "minProperties": 1
+                  "name": { "type": "string", "maxLength": 100 }
+                }
               }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "정보 수정 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/User" }
-              }
-            }
-          },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "200": { "description": "Updated user", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserProfile" } } } },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       },
       "delete": {
-        "tags": ["User"],
-        "summary": "회원 탈퇴",
-        "description": "현재 인증된 사용자의 계정을 즉시 하드 삭제합니다 (USR-003). 삭제된 데이터는 복구할 수 없습니다.\n\n**본인 확인**: 요청 본문에 현재 비밀번호를 포함해야 합니다.\n\n**주의**: 해당 사용자가 특정 팀의 마지막 ADMIN인 경우 탈퇴가 거부됩니다 (TEAM-002).",
-        "operationId": "deleteMe",
-        "security": [{ "bearerAuth": [] }],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["password"],
-                "properties": {
-                  "password": { "type": "string", "example": "P@ssw0rd!", "description": "본인 확인용 현재 비밀번호" }
-                }
-              }
-            }
-          }
-        },
+        "tags": ["Users"],
+        "summary": "Delete current user",
         "responses": {
-          "204": { "$ref": "#/components/responses/NoContent" },
-          "401": {
-            "description": "비밀번호 불일치",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "INVALID_PASSWORD", "message": "비밀번호가 올바르지 않습니다." }
-              }
-            }
-          },
-          "422": {
-            "description": "마지막 팀 ADMIN으로 탈퇴 불가 (TEAM-002)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "TEAM-002", "message": "팀의 마지막 ADMIN입니다. 다른 멤버에게 ADMIN 역할을 위임하거나 팀을 먼저 삭제해 주세요." }
-              }
-            }
-          }
+          "204": { "description": "Deleted" },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/todos": {
+    "/api/todos": {
       "get": {
-        "tags": ["Todo"],
-        "summary": "할일 목록 조회",
-        "description": "인증된 사용자의 개인 할일 목록을 반환합니다. 기본 정렬: `due_date ASC` (TODO-007). 팀 할일은 포함되지 않습니다.",
-        "operationId": "listTodos",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Todos"],
+        "summary": "List accessible todos",
         "parameters": [
-          {
-            "name": "status",
-            "in": "query",
-            "description": "진행 상태 필터",
-            "schema": { "$ref": "#/components/schemas/TodoStatus" }
-          },
-          {
-            "name": "category_id",
-            "in": "query",
-            "description": "카테고리 ID 필터",
-            "schema": { "type": "string", "format": "uuid" }
-          },
-          {
-            "name": "due_date_from",
-            "in": "query",
-            "description": "마감일 시작 범위 (YYYY-MM-DD)",
-            "schema": { "type": "string", "format": "date", "example": "2026-05-01" }
-          },
-          {
-            "name": "due_date_to",
-            "in": "query",
-            "description": "마감일 종료 범위 (YYYY-MM-DD)",
-            "schema": { "type": "string", "format": "date", "example": "2026-05-31" }
-          },
-          {
-            "name": "keyword",
-            "in": "query",
-            "description": "제목 키워드 검색",
-            "schema": { "type": "string", "example": "API" }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "description": "페이지 번호 (기본값: 1)",
-            "schema": { "type": "integer", "minimum": 1, "default": 1, "example": 1 }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "페이지당 항목 수 (기본값: 20)",
-            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20, "example": 20 }
-          }
+          { "name": "status", "in": "query", "schema": { "$ref": "#/components/schemas/TodoStatus" } },
+          { "name": "categoryId", "in": "query", "schema": { "type": "string", "format": "uuid" } },
+          { "name": "startDate", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "endDate", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "minimum": 1, "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "default": 20 } }
         ],
         "responses": {
-          "200": {
-            "description": "할일 목록 조회 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/PaginatedTodos" }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "200": { "description": "Todo list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TodoListResponse" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       },
       "post": {
-        "tags": ["Todo"],
-        "summary": "할일 생성",
-        "description": "새로운 개인 또는 팀 할일을 생성합니다.\n\n**개인 할일**: `team_id` 미포함 또는 `null`\n\n**팀 할일**: `team_id` 필수. 팀의 ADMIN 또는 MEMBER만 생성 가능 (VIEWER 불가, AUTH-004)\n\n**유효성 검사**:\n- `title` 필수 (TODO-001)\n- `due_date >= start_date` (TODO-002)\n- `status` Enum 값 (TODO-003)",
-        "operationId": "createTodo",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Todos"],
+        "summary": "Create todo",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["title"],
-                "properties": {
-                  "title": { "type": "string", "maxLength": 500, "example": "API 명세서 작성", "description": "할일 제목 (필수, TODO-001)" },
-                  "description": { "type": "string", "nullable": true, "example": "OpenAPI 3.0.3 형식으로 전체 엔드포인트 작성" },
-                  "start_date": { "type": "string", "format": "date", "nullable": true, "example": "2026-05-13", "description": "시작일 (YYYY-MM-DD)" },
-                  "due_date": { "type": "string", "format": "date", "nullable": true, "example": "2026-05-20", "description": "마감일. start_date 이후여야 함 (TODO-002)" },
-                  "category_id": { "type": "string", "format": "uuid", "nullable": true, "example": "c9d8e7f6-a5b4-3c2d-1e0f-9a8b7c6d5e4f" },
-                  "status": { "$ref": "#/components/schemas/TodoStatus" },
-                  "team_id": { "type": "string", "format": "uuid", "nullable": true, "example": null, "description": "팀 할일인 경우 팀 ID. ADMIN 또는 MEMBER만 생성 가능 (TODO-010)" }
-                }
-              },
-              "examples": {
-                "personal_todo": {
-                  "summary": "개인 할일 생성",
-                  "value": { "title": "독서 30분", "description": "클린 코드 3장", "due_date": "2026-05-15", "category_id": "c9d8e7f6-a5b4-3c2d-1e0f-9a8b7c6d5e4f", "status": "PLANNED" }
-                },
-                "team_todo": {
-                  "summary": "팀 할일 생성",
-                  "value": { "title": "스프린트 계획 회의", "start_date": "2026-05-14", "due_date": "2026-05-14", "team_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479", "status": "PLANNED" }
-                }
-              }
+              "schema": { "$ref": "#/components/schemas/TodoCreateRequest" }
             }
           }
         },
         "responses": {
-          "201": {
-            "description": "할일 생성 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Todo" }
-              }
-            }
-          },
-          "400": {
-            "description": "입력값 오류",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "examples": {
-                  "missing_title": {
-                    "summary": "제목 누락 (TODO-001)",
-                    "value": { "code": "TODO-001", "message": "할일 제목은 필수 입력 항목입니다." }
-                  },
-                  "invalid_date": {
-                    "summary": "날짜 순서 오류 (TODO-002)",
-                    "value": { "code": "TODO-002", "message": "마감일은 시작일 이후여야 합니다." }
-                  },
-                  "invalid_status": {
-                    "summary": "잘못된 상태 값 (TODO-003)",
-                    "value": { "code": "TODO-003", "message": "유효하지 않은 상태 값입니다. (PLANNED, IN_PROGRESS, DONE, ON_HOLD 중 선택)" }
-                  }
-                }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": {
-            "description": "팀 VIEWER 역할로 팀 할일 생성 불가 (AUTH-004)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "AUTH-004", "message": "VIEWER 역할은 팀 할일을 생성할 수 없습니다." }
-              }
-            }
-          }
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Todo" } } } },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/todos/today": {
+    "/api/todos/today": {
       "get": {
-        "tags": ["Todo"],
-        "summary": "오늘 할일 조회",
-        "description": "오늘 날짜가 `start_date` 이상이고 `due_date` 이하인 개인 할일을 반환합니다. KST(UTC+9) 기준으로 처리됩니다 (TODO-005, TODO-009).",
-        "operationId": "getTodayTodos",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Todos"],
+        "summary": "Get today's todos in KST",
         "responses": {
-          "200": {
-            "description": "오늘 할일 조회 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/TodoListResponse" }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "200": { "description": "Todos for today", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Todo" } } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/todos/this-week": {
+    "/api/todos/this-week": {
       "get": {
-        "tags": ["Todo"],
-        "summary": "이번 주 할일 조회",
-        "description": "이번 주(월요일~일요일) 내에 `due_date`가 포함된 개인 할일을 반환합니다. KST(UTC+9) 기준으로 처리됩니다 (TODO-006, TODO-009).",
-        "operationId": "getThisWeekTodos",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Todos"],
+        "summary": "Get this week's todos in KST",
         "responses": {
-          "200": {
-            "description": "이번 주 할일 조회 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/TodoListResponse" }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "200": { "description": "Todos for this week", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Todo" } } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/todos/{todoId}": {
+    "/api/todos/{id}": {
       "get": {
-        "tags": ["Todo"],
-        "summary": "할일 상세 조회",
-        "description": "특정 할일의 상세 정보를 반환합니다. 본인이 소유한 개인 할일만 조회 가능합니다.",
-        "operationId": "getTodo",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Todos"],
+        "summary": "Get todo by id",
         "parameters": [
-          { "name": "todoId", "in": "path", "required": true, "description": "할일 ID", "schema": { "type": "string", "format": "uuid" } }
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
         ],
         "responses": {
-          "200": {
-            "description": "할일 상세 조회 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Todo" }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": {
-            "description": "할일 소유자가 아님 (AUTH-002)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "AUTH-002", "message": "본인의 할일만 조회할 수 있습니다." }
-              }
-            }
-          },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "200": { "description": "Todo", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Todo" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       },
       "patch": {
-        "tags": ["Todo"],
-        "summary": "할일 수정",
-        "description": "할일 정보를 부분 수정합니다.\n\n- **개인 할일**: 소유자만 수정 가능 (AUTH-002)\n- **팀 할일**: ADMIN 또는 MEMBER만 수정 가능 (AUTH-003)",
-        "operationId": "updateTodo",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Todos"],
+        "summary": "Update todo",
         "parameters": [
-          { "name": "todoId", "in": "path", "required": true, "description": "할일 ID", "schema": { "type": "string", "format": "uuid" } }
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "title": { "type": "string", "maxLength": 500, "example": "API 명세서 최종 검토" },
-                  "description": { "type": "string", "nullable": true, "example": "팀장 검토 후 배포" },
-                  "start_date": { "type": "string", "format": "date", "nullable": true, "example": "2026-05-13" },
-                  "due_date": { "type": "string", "format": "date", "nullable": true, "example": "2026-05-21" },
-                  "category_id": { "type": "string", "format": "uuid", "nullable": true },
-                  "status": { "$ref": "#/components/schemas/TodoStatus" }
-                },
-                "minProperties": 1
-              }
+              "schema": { "$ref": "#/components/schemas/TodoUpdateRequest" }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "할일 수정 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Todo" }
-              }
-            }
-          },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "200": { "description": "Updated todo", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Todo" } } } },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       },
       "delete": {
-        "tags": ["Todo"],
-        "summary": "할일 삭제",
-        "description": "할일을 즉시 하드 삭제합니다 (TODO-004). 삭제된 데이터는 복구할 수 없습니다.\n\n- **개인 할일**: 소유자만 삭제 가능 (AUTH-002)\n- **팀 할일**: ADMIN 또는 MEMBER만 삭제 가능 (AUTH-003)",
-        "operationId": "deleteTodo",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Todos"],
+        "summary": "Delete todo",
         "parameters": [
-          { "name": "todoId", "in": "path", "required": true, "description": "할일 ID", "schema": { "type": "string", "format": "uuid" } }
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
         ],
         "responses": {
-          "204": { "$ref": "#/components/responses/NoContent" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "204": { "description": "Deleted" },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/todos/{todoId}/status": {
+    "/api/todos/{id}/status": {
       "patch": {
-        "tags": ["Todo"],
-        "summary": "진행 상태 변경",
-        "description": "할일의 진행 상태를 변경합니다. 허용된 상태 전이만 가능합니다 (TODO-008):\n\n| 현재 상태 | 전이 가능 상태 |\n|-----------|---------------|\n| PLANNED | IN_PROGRESS, ON_HOLD |\n| IN_PROGRESS | DONE, ON_HOLD |\n| DONE | IN_PROGRESS (재개 허용) |\n| ON_HOLD | PLANNED, IN_PROGRESS |",
-        "operationId": "updateTodoStatus",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Todos"],
+        "summary": "Update todo status",
         "parameters": [
-          { "name": "todoId", "in": "path", "required": true, "description": "할일 ID", "schema": { "type": "string", "format": "uuid" } }
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["status"],
-                "properties": {
-                  "status": { "$ref": "#/components/schemas/TodoStatus" }
-                }
-              },
-              "example": { "status": "IN_PROGRESS" }
+              "schema": { "$ref": "#/components/schemas/TodoStatusUpdateRequest" }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "상태 변경 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Todo" }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "422": {
-            "description": "허용되지 않은 상태 전이 (TODO-008)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "TODO-008", "message": "DONE 상태에서 PLANNED로 직접 전이할 수 없습니다." }
-              }
-            }
-          }
+          "200": { "description": "Updated status", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Todo" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "422": { "description": "Invalid state transition", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/categories": {
+    "/api/categories": {
       "get": {
-        "tags": ["Category"],
-        "summary": "카테고리 목록 조회",
-        "description": "사용자의 개인 카테고리와 소속 팀의 카테고리를 모두 반환합니다.",
-        "operationId": "listCategories",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          {
-            "name": "owner_type",
-            "in": "query",
-            "description": "소유자 유형 필터",
-            "schema": { "type": "string", "enum": ["USER", "TEAM"] }
-          },
-          {
-            "name": "team_id",
-            "in": "query",
-            "description": "팀 ID 필터 (owner_type=TEAM일 때 사용)",
-            "schema": { "type": "string", "format": "uuid" }
-          }
-        ],
+        "tags": ["Categories"],
+        "summary": "List accessible categories",
         "responses": {
-          "200": {
-            "description": "카테고리 목록 조회 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/CategoryListResponse" },
-                "example": {
-                  "data": [
-                    { "category_id": "c9d8e7f6-a5b4-3c2d-1e0f-9a8b7c6d5e4f", "owner_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890", "owner_type": "USER", "name": "업무", "color": "#3B82F6", "created_at": "2026-05-01T09:00:00+09:00" },
-                    { "category_id": "d8e7f6a5-b4c3-2d1e-0f9a-8b7c6d5e4f3c", "owner_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890", "owner_type": "USER", "name": "개인", "color": "#10B981", "created_at": "2026-05-01T09:00:00+09:00" }
-                  ]
-                }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "200": { "description": "Category list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Category" } } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       },
       "post": {
-        "tags": ["Category"],
-        "summary": "카테고리 생성",
-        "description": "새로운 카테고리를 생성합니다.\n\n- **개인 카테고리**: 누구나 생성 가능\n- **팀 카테고리**: 팀 ADMIN만 생성 가능\n- 카테고리명은 동일 소유자 범위 내에서 유일해야 합니다 (CAT-001)\n- 색상은 HEX 형식(`#RRGGBB`)이어야 합니다 (CAT-004)",
-        "operationId": "createCategory",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Categories"],
+        "summary": "Create category",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["name", "owner_type"],
-                "properties": {
-                  "name": { "type": "string", "maxLength": 100, "example": "사이드 프로젝트", "description": "카테고리명 (동일 소유자 범위 내 유일, CAT-001)" },
-                  "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$", "nullable": true, "example": "#8B5CF6", "description": "HEX 색상 코드 (CAT-004)" },
-                  "owner_type": { "type": "string", "enum": ["USER", "TEAM"], "example": "USER" },
-                  "team_id": { "type": "string", "format": "uuid", "nullable": true, "example": null, "description": "owner_type=TEAM일 때 필수" }
-                }
-              },
-              "examples": {
-                "user_category": {
-                  "summary": "개인 카테고리 생성",
-                  "value": { "name": "사이드 프로젝트", "color": "#8B5CF6", "owner_type": "USER" }
-                },
-                "team_category": {
-                  "summary": "팀 카테고리 생성 (ADMIN 전용)",
-                  "value": { "name": "스프린트", "color": "#F59E0B", "owner_type": "TEAM", "team_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479" }
-                }
-              }
+              "schema": { "$ref": "#/components/schemas/CategoryCreateRequest" }
             }
           }
         },
         "responses": {
-          "201": {
-            "description": "카테고리 생성 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Category" }
-              }
-            }
-          },
-          "400": {
-            "description": "입력값 오류",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "examples": {
-                  "invalid_color": {
-                    "summary": "잘못된 색상 형식 (CAT-004)",
-                    "value": { "code": "CAT-004", "message": "색상은 #RRGGBB 형식의 HEX 코드여야 합니다." }
-                  },
-                  "missing_team_id": {
-                    "summary": "팀 카테고리 시 team_id 누락",
-                    "value": { "code": "VALIDATION_ERROR", "message": "owner_type이 TEAM인 경우 team_id는 필수입니다." }
-                  }
-                }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": {
-            "description": "팀 ADMIN이 아님",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "FORBIDDEN", "message": "팀 카테고리는 ADMIN만 생성할 수 있습니다." }
-              }
-            }
-          },
-          "409": {
-            "description": "동일 소유자 범위 내 카테고리명 중복 (CAT-001)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "CAT-001", "message": "이미 존재하는 카테고리명입니다." }
-              }
-            }
-          }
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Category" } } } },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "409": { "description": "Duplicate category", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/categories/{categoryId}": {
-      "patch": {
-        "tags": ["Category"],
-        "summary": "카테고리 수정",
-        "description": "카테고리 이름 또는 색상을 부분 수정합니다.\n\n- **개인 카테고리**: 소유자만 수정 가능\n- **팀 카테고리**: 팀 ADMIN만 수정 가능",
-        "operationId": "updateCategory",
-        "security": [{ "bearerAuth": [] }],
+    "/api/categories/{id}": {
+      "get": {
+        "tags": ["Categories"],
+        "summary": "Get category by id",
         "parameters": [
-          { "name": "categoryId", "in": "path", "required": true, "description": "카테고리 ID", "schema": { "type": "string", "format": "uuid" } }
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Category", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Category" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      },
+      "patch": {
+        "tags": ["Categories"],
+        "summary": "Update category",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": { "type": "string", "maxLength": 100, "example": "사이드 프로젝트 v2" },
-                  "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$", "nullable": true, "example": "#EC4899" }
-                },
-                "minProperties": 1
-              }
+              "schema": { "$ref": "#/components/schemas/CategoryUpdateRequest" }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "카테고리 수정 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Category" }
-              }
-            }
-          },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "409": {
-            "description": "동일 소유자 범위 내 카테고리명 중복 (CAT-001)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "CAT-001", "message": "이미 존재하는 카테고리명입니다." }
-              }
-            }
-          }
+          "200": { "description": "Updated category", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Category" } } } },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "409": { "description": "Duplicate category", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       },
       "delete": {
-        "tags": ["Category"],
-        "summary": "카테고리 삭제",
-        "description": "카테고리를 삭제합니다. 해당 카테고리에 속한 할일의 `category_id`는 NULL로 설정됩니다 (CAT-002).\n\n- **개인 카테고리**: 소유자만 삭제 가능\n- **팀 카테고리**: 팀 ADMIN만 삭제 가능",
-        "operationId": "deleteCategory",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Categories"],
+        "summary": "Delete category",
         "parameters": [
-          { "name": "categoryId", "in": "path", "required": true, "description": "카테고리 ID", "schema": { "type": "string", "format": "uuid" } }
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
         ],
         "responses": {
-          "204": { "$ref": "#/components/responses/NoContent" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "204": { "description": "Deleted" },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/teams": {
+    "/api/teams": {
       "get": {
-        "tags": ["Team"],
-        "summary": "내 팀 목록 조회",
-        "description": "현재 인증된 사용자가 소속된 모든 팀 목록을 반환합니다.",
-        "operationId": "listTeams",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Teams"],
+        "summary": "List teams for current user",
         "responses": {
-          "200": {
-            "description": "팀 목록 조회 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/TeamListResponse" }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "200": { "description": "Team list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Team" } } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       },
       "post": {
-        "tags": ["Team"],
-        "summary": "팀 생성",
-        "description": "새로운 팀을 생성합니다. 생성자는 자동으로 ADMIN 역할이 부여됩니다 (TEAM-001).",
-        "operationId": "createTeam",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Teams"],
+        "summary": "Create team",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["name"],
-                "properties": {
-                  "name": { "type": "string", "maxLength": 100, "example": "백엔드 개발팀", "description": "팀 이름" },
-                  "description": { "type": "string", "nullable": true, "example": "Node.js 백엔드 개발 담당 팀" }
-                }
-              }
+              "schema": { "$ref": "#/components/schemas/TeamRequest" }
             }
           }
         },
         "responses": {
-          "201": {
-            "description": "팀 생성 성공. 생성자에게 ADMIN 역할 자동 부여 (TEAM-001)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Team" }
-              }
-            }
-          },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Team" } } } },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/teams/{teamId}": {
+    "/api/teams/{teamId}": {
       "get": {
-        "tags": ["Team"],
-        "summary": "팀 상세 조회",
-        "description": "팀 상세 정보와 멤버 목록을 반환합니다. 팀 소속 멤버만 조회 가능합니다.",
-        "operationId": "getTeam",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Teams"],
+        "summary": "Get team",
         "parameters": [
-          { "name": "teamId", "in": "path", "required": true, "description": "팀 ID", "schema": { "type": "string", "format": "uuid" } }
+          { "name": "teamId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
         ],
         "responses": {
-          "200": {
-            "description": "팀 상세 조회 성공",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    { "$ref": "#/components/schemas/Team" },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "members": { "type": "array", "items": { "$ref": "#/components/schemas/TeamMember" } }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "200": { "description": "Team", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Team" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       },
       "patch": {
-        "tags": ["Team"],
-        "summary": "팀 정보 수정",
-        "description": "팀 이름 또는 설명을 부분 수정합니다. 팀 ADMIN만 수정 가능합니다.",
-        "operationId": "updateTeam",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Teams"],
+        "summary": "Update team",
         "parameters": [
-          { "name": "teamId", "in": "path", "required": true, "description": "팀 ID", "schema": { "type": "string", "format": "uuid" } }
+          { "name": "teamId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": { "type": "string", "maxLength": 100, "example": "풀스택 개발팀" },
-                  "description": { "type": "string", "nullable": true, "example": "프론트엔드 및 백엔드 통합 개발팀" }
-                },
-                "minProperties": 1
-              }
+              "schema": { "$ref": "#/components/schemas/TeamRequest" }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "팀 정보 수정 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Team" }
-              }
-            }
-          },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "200": { "description": "Updated team", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Team" } } } },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       },
       "delete": {
-        "tags": ["Team"],
-        "summary": "팀 삭제",
-        "description": "팀을 삭제합니다. 팀 ADMIN만 삭제 가능합니다.\n\n**주의**: 팀 삭제 시 팀의 모든 할일과 카테고리가 함께 삭제됩니다 (TEAM-005).",
-        "operationId": "deleteTeam",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Teams"],
+        "summary": "Delete team",
         "parameters": [
-          { "name": "teamId", "in": "path", "required": true, "description": "팀 ID", "schema": { "type": "string", "format": "uuid" } }
+          { "name": "teamId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
         ],
         "responses": {
-          "204": { "$ref": "#/components/responses/NoContent" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "204": { "description": "Deleted" },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/teams/{teamId}/members": {
+    "/api/teams/{teamId}/members": {
       "get": {
-        "tags": ["Team"],
-        "summary": "팀 멤버 목록 조회",
-        "description": "팀 소속 멤버 목록을 반환합니다. 팀 소속 멤버만 조회 가능합니다.",
-        "operationId": "listTeamMembers",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Teams"],
+        "summary": "List team members",
         "parameters": [
-          { "name": "teamId", "in": "path", "required": true, "description": "팀 ID", "schema": { "type": "string", "format": "uuid" } }
+          { "name": "teamId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
         ],
         "responses": {
-          "200": {
-            "description": "팀 멤버 목록 조회 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/TeamMemberListResponse" }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "200": { "description": "Member list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/TeamMember" } } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/teams/{teamId}/members/{userId}/role": {
+    "/api/teams/{teamId}/members/{userId}/role": {
       "patch": {
-        "tags": ["Team"],
-        "summary": "멤버 역할 변경",
-        "description": "팀 멤버의 역할을 변경합니다. 팀 ADMIN만 수행 가능합니다 (AUTH-005).\n\n**제약**: 팀에 마지막 ADMIN이 한 명 남은 경우 해당 ADMIN의 역할 변경이 불가합니다 (TEAM-002).",
-        "operationId": "updateMemberRole",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Teams"],
+        "summary": "Change member role",
         "parameters": [
-          { "name": "teamId", "in": "path", "required": true, "description": "팀 ID", "schema": { "type": "string", "format": "uuid" } },
-          { "name": "userId", "in": "path", "required": true, "description": "역할을 변경할 사용자 ID", "schema": { "type": "string", "format": "uuid" } }
+          { "name": "teamId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "userId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["role"],
-                "properties": {
-                  "role": { "type": "string", "enum": ["ADMIN", "MEMBER", "VIEWER"], "example": "MEMBER" }
-                }
-              }
+              "schema": { "$ref": "#/components/schemas/TeamRoleUpdateRequest" }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "역할 변경 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/TeamMember" }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "422": {
-            "description": "마지막 ADMIN 역할 변경 불가 (TEAM-002)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "TEAM-002", "message": "팀의 마지막 ADMIN의 역할은 변경할 수 없습니다." }
-              }
-            }
-          }
+          "200": { "description": "Updated member", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TeamMember" } } } },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "422": { "description": "Business rule violation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/teams/{teamId}/members/{userId}": {
+    "/api/teams/{teamId}/members/me": {
       "delete": {
-        "tags": ["Team"],
-        "summary": "멤버 추방",
-        "description": "팀에서 멤버를 추방합니다. 팀 ADMIN만 수행 가능합니다 (AUTH-005).\n\n**제약**: 팀의 마지막 ADMIN은 추방할 수 없습니다 (TEAM-002).",
-        "operationId": "kickMember",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Teams"],
+        "summary": "Leave team",
         "parameters": [
-          { "name": "teamId", "in": "path", "required": true, "description": "팀 ID", "schema": { "type": "string", "format": "uuid" } },
-          { "name": "userId", "in": "path", "required": true, "description": "추방할 사용자 ID", "schema": { "type": "string", "format": "uuid" } }
+          { "name": "teamId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
         ],
         "responses": {
-          "204": { "$ref": "#/components/responses/NoContent" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "422": {
-            "description": "마지막 ADMIN 추방 불가 (TEAM-002)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "TEAM-002", "message": "팀의 마지막 ADMIN은 추방할 수 없습니다." }
-              }
-            }
-          }
+          "204": { "description": "Left team" },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "422": { "description": "Business rule violation", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/teams/{teamId}/members/me": {
+    "/api/teams/{teamId}/members/{userId}": {
       "delete": {
-        "tags": ["Team"],
-        "summary": "팀 탈퇴",
-        "description": "현재 인증된 사용자가 팀에서 탈퇴합니다.\n\n- 탈퇴 시 해당 사용자가 생성한 팀 할일의 `user_id`는 NULL로 설정됩니다 (TEAM-004)\n- 마지막 ADMIN인 경우 탈퇴가 불가합니다 (TEAM-002)",
-        "operationId": "leaveTeam",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Teams"],
+        "summary": "Kick member",
         "parameters": [
-          { "name": "teamId", "in": "path", "required": true, "description": "팀 ID", "schema": { "type": "string", "format": "uuid" } }
+          { "name": "teamId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "userId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
         ],
         "responses": {
-          "204": { "$ref": "#/components/responses/NoContent" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "422": {
-            "description": "마지막 ADMIN으로 탈퇴 불가 (TEAM-002)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "TEAM-002", "message": "팀의 마지막 ADMIN입니다. 다른 멤버에게 ADMIN 역할을 위임하거나 팀을 삭제해 주세요." }
-              }
-            }
-          }
+          "204": { "description": "Member removed" },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/teams/{teamId}/invitations": {
+    "/api/teams/{teamId}/invitations": {
+      "get": {
+        "tags": ["Teams"],
+        "summary": "List team invitations",
+        "parameters": [
+          { "name": "teamId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Invitation list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/TeamInvitation" } } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      },
       "post": {
-        "tags": ["Team"],
-        "summary": "멤버 초대",
-        "description": "이메일로 사용자를 팀에 초대합니다. 팀 ADMIN만 초대할 수 있습니다 (INV-001).\n\n- 초대 시 부여 가능한 역할: `MEMBER` 또는 `VIEWER`만 가능 (ADMIN 초대 불가, INV-001)\n- 초대 생성 시 피초대자에게 `TEAM_INVITE` 알림이 발송됩니다 (NOTIF-002)\n- 이미 팀 소속이거나 PENDING 초대가 있는 경우 재초대 불가 (INV-002)",
-        "operationId": "inviteMember",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Teams"],
+        "summary": "Create team invitation",
         "parameters": [
-          { "name": "teamId", "in": "path", "required": true, "description": "팀 ID", "schema": { "type": "string", "format": "uuid" } }
+          { "name": "teamId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["email", "role"],
-                "properties": {
-                  "email": { "type": "string", "format": "email", "example": "kim@example.com", "description": "초대할 사용자 이메일" },
-                  "role": { "type": "string", "enum": ["MEMBER", "VIEWER"], "example": "MEMBER", "description": "수락 시 부여될 역할. ADMIN 초대 불가 (INV-001)" }
-                }
-              }
+              "schema": { "$ref": "#/components/schemas/TeamInvitationCreateRequest" }
             }
           }
         },
         "responses": {
-          "201": {
-            "description": "초대 생성 성공. TEAM_INVITE 알림 발송됨 (NOTIF-002)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "invitation_id": { "type": "string", "format": "uuid", "example": "f1e2d3c4-b5a6-7890-abcd-ef0123456789" },
-                    "team_id": { "type": "string", "format": "uuid", "example": "f47ac10b-58cc-4372-a567-0e02b2c3d479" },
-                    "invited_user_id": { "type": "string", "format": "uuid", "example": "b2c3d4e5-f6a7-8901-bcde-f01234567890" },
-                    "invited_by": { "type": "string", "format": "uuid", "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890" },
-                    "role": { "type": "string", "enum": ["MEMBER", "VIEWER"], "example": "MEMBER" },
-                    "status": { "type": "string", "enum": ["PENDING"], "example": "PENDING" },
-                    "expires_at": { "type": "string", "format": "date-time", "example": "2026-05-20T09:00:00+09:00" },
-                    "created_at": { "type": "string", "format": "date-time", "example": "2026-05-13T09:00:00+09:00" }
-                  },
-                  "required": ["invitation_id", "team_id", "invited_user_id", "invited_by", "role", "status", "expires_at", "created_at"]
-                }
-              }
-            }
-          },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": {
-            "description": "이메일로 등록된 사용자를 찾을 수 없음",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "NOT_FOUND", "message": "해당 이메일로 가입된 사용자를 찾을 수 없습니다." }
-              }
-            }
-          },
-          "409": {
-            "description": "이미 팀 소속이거나 PENDING 초대 존재 (INV-002)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "examples": {
-                  "already_member": {
-                    "summary": "이미 팀 소속",
-                    "value": { "code": "INV-002", "message": "이미 팀 소속 멤버입니다." }
-                  },
-                  "pending_invite": {
-                    "summary": "이미 PENDING 초대 존재",
-                    "value": { "code": "INV-002", "message": "이미 처리 중인 초대가 있습니다." }
-                  }
-                }
-              }
-            }
-          }
+          "201": { "description": "Invitation created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TeamInvitation" } } } },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "409": { "description": "Invitation or membership conflict", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/teams/{teamId}/todos": {
-      "get": {
-        "tags": ["Team"],
-        "summary": "팀 할일 목록 조회",
-        "description": "특정 팀의 할일 목록을 반환합니다. ADMIN, MEMBER, VIEWER 모든 역할이 조회 가능합니다 (AUTH-004).\n\n기본 정렬: `due_date ASC` (TODO-007)",
-        "operationId": "listTeamTodos",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          { "name": "teamId", "in": "path", "required": true, "description": "팀 ID", "schema": { "type": "string", "format": "uuid" } },
-          { "name": "status", "in": "query", "description": "진행 상태 필터", "schema": { "$ref": "#/components/schemas/TodoStatus" } },
-          { "name": "category_id", "in": "query", "description": "카테고리 ID 필터", "schema": { "type": "string", "format": "uuid" } },
-          { "name": "due_date_from", "in": "query", "description": "마감일 시작 범위 (YYYY-MM-DD)", "schema": { "type": "string", "format": "date" } },
-          { "name": "due_date_to", "in": "query", "description": "마감일 종료 범위 (YYYY-MM-DD)", "schema": { "type": "string", "format": "date" } },
-          { "name": "keyword", "in": "query", "description": "제목 키워드 검색", "schema": { "type": "string" } },
-          { "name": "page", "in": "query", "description": "페이지 번호 (기본값: 1)", "schema": { "type": "integer", "minimum": 1, "default": 1 } },
-          { "name": "limit", "in": "query", "description": "페이지당 항목 수 (기본값: 20)", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } }
-        ],
-        "responses": {
-          "200": {
-            "description": "팀 할일 목록 조회 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/PaginatedTodos" }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
-        }
-      }
-    },
-    "/invitations/{invitationId}/accept": {
-      "post": {
-        "tags": ["Team"],
-        "summary": "초대 수락",
-        "description": "팀 초대를 수락합니다. 수락 시 `TeamMember` 레코드가 생성되고 관련 `TEAM_INVITE` 알림이 읽음 처리됩니다 (INV-003).",
-        "operationId": "acceptInvitation",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          { "name": "invitationId", "in": "path", "required": true, "description": "초대 ID", "schema": { "type": "string", "format": "uuid" } }
-        ],
-        "responses": {
-          "200": {
-            "description": "초대 수락 성공. 팀 멤버로 추가됨",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/TeamMember" }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "409": {
-            "description": "이미 팀 소속 멤버 (TEAM-003)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "TEAM-003", "message": "이미 해당 팀의 멤버입니다." }
-              }
-            }
-          },
-          "422": {
-            "description": "초대 만료 (INV-005)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "INV-005", "message": "초대가 만료되었습니다." }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/invitations/{invitationId}/decline": {
-      "post": {
-        "tags": ["Team"],
-        "summary": "초대 거절",
-        "description": "팀 초대를 거절합니다. 거절 시 초대 상태가 `DECLINED`로 변경됩니다 (INV-004).",
-        "operationId": "declineInvitation",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          { "name": "invitationId", "in": "path", "required": true, "description": "초대 ID", "schema": { "type": "string", "format": "uuid" } }
-        ],
-        "responses": {
-          "200": {
-            "description": "초대 거절 성공",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "invitation_id": { "type": "string", "format": "uuid", "example": "f1e2d3c4-b5a6-7890-abcd-ef0123456789" },
-                    "status": { "type": "string", "enum": ["DECLINED"], "example": "DECLINED" },
-                    "responded_at": { "type": "string", "format": "date-time", "example": "2026-05-13T10:00:00+09:00" }
-                  },
-                  "required": ["invitation_id", "status", "responded_at"]
-                }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "422": {
-            "description": "만료된 초대 또는 이미 처리된 초대",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "examples": {
-                  "expired": {
-                    "summary": "초대 만료",
-                    "value": { "code": "INV-005", "message": "초대가 만료되었습니다." }
-                  },
-                  "already_processed": {
-                    "summary": "이미 처리된 초대",
-                    "value": { "code": "INVITATION_ALREADY_PROCESSED", "message": "이미 수락 또는 거절된 초대입니다." }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/notifications": {
-      "get": {
-        "tags": ["Notification"],
-        "summary": "알림 목록 조회",
-        "description": "현재 인증된 사용자의 알림 목록을 반환합니다. 기본 정렬: `created_at DESC` (최신순, NOTIF-003).",
-        "operationId": "listNotifications",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [
-          {
-            "name": "is_read",
-            "in": "query",
-            "description": "읽음 여부 필터 (`true`: 읽은 알림, `false`: 읽지 않은 알림)",
-            "schema": { "type": "boolean" }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "알림 목록 조회 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/NotificationListResponse" },
-                "example": {
-                  "data": [
-                    {
-                      "notification_id": "e7f8a9b0-c1d2-3456-789a-bcdef0123456",
-                      "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-                      "type": "TEAM_INVITE",
-                      "reference_id": "f1e2d3c4-b5a6-7890-abcd-ef0123456789",
-                      "is_read": false,
-                      "created_at": "2026-05-13T09:00:00+09:00"
-                    }
-                  ],
-                  "unread_count": 1
-                }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
-        }
-      }
-    },
-    "/notifications/read-all": {
+    "/api/invitations/{invitationId}/accept": {
       "patch": {
-        "tags": ["Notification"],
-        "summary": "전체 알림 읽음 처리",
-        "description": "현재 인증된 사용자의 읽지 않은 모든 알림을 읽음(`is_read = true`) 처리합니다.",
-        "operationId": "markAllNotificationsRead",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Teams"],
+        "summary": "Accept invitation",
+        "parameters": [
+          { "name": "invitationId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
         "responses": {
-          "200": {
-            "description": "전체 읽음 처리 성공",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "updated_count": { "type": "integer", "example": 5, "description": "읽음 처리된 알림 수" }
-                  },
-                  "required": ["updated_count"]
-                }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" }
+          "200": { "description": "Accepted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageResponse" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "409": { "description": "Already a member", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "422": { "description": "Invitation not acceptable", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/notifications/{notificationId}/read": {
+    "/api/invitations/{invitationId}/decline": {
       "patch": {
-        "tags": ["Notification"],
-        "summary": "알림 읽음 처리",
-        "description": "특정 알림을 읽음(`is_read = true`) 처리합니다. 본인의 알림만 처리 가능합니다 (NOTIF-003).",
-        "operationId": "markNotificationRead",
-        "security": [{ "bearerAuth": [] }],
+        "tags": ["Teams"],
+        "summary": "Decline invitation",
         "parameters": [
-          { "name": "notificationId", "in": "path", "required": true, "description": "알림 ID", "schema": { "type": "string", "format": "uuid" } }
+          { "name": "invitationId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
         ],
         "responses": {
-          "200": {
-            "description": "알림 읽음 처리 성공",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Notification" }
-              }
-            }
-          },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": {
-            "description": "본인 알림이 아님",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
-                "example": { "code": "FORBIDDEN", "message": "본인의 알림만 읽음 처리할 수 있습니다." }
-              }
-            }
-          },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "200": { "description": "Declined", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MessageResponse" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "422": { "description": "Invitation not declineable", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "List notifications",
+        "responses": {
+          "200": { "description": "Notification list", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Notification" } } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/api/notifications/read-all": {
+      "patch": {
+        "tags": ["Notifications"],
+        "summary": "Mark all notifications as read",
+        "responses": {
+          "204": { "description": "Marked as read" },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/api/notifications/{id}/read": {
+      "patch": {
+        "tags": ["Notifications"],
+        "summary": "Mark notification as read",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "Updated notification", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Notification" } } } },
+          "401": { "description": "Unauthorized", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Forbidden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     }

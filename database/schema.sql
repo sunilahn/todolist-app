@@ -2,38 +2,56 @@
 -- Todolist-App Database Schema
 -- 참조: docs/6-erd.md (v1.0), docs/2-prd.md (v1.4)
 -- PostgreSQL 17
+-- 멱등 실행 보장: 초기화 후 재실행해도 오류 없이 완료된다
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
 -- Extensions
 -- ---------------------------------------------------------------------------
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";  -- gen_random_uuid()
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 
 -- ---------------------------------------------------------------------------
--- Enum Types
+-- Enum Types (DO 블록으로 중복 생성 방지)
 -- ---------------------------------------------------------------------------
-CREATE TYPE todo_status AS ENUM ('PLANNED', 'IN_PROGRESS', 'DONE', 'ON_HOLD');
+DO $$ BEGIN
+  CREATE TYPE todo_status AS ENUM ('PLANNED', 'IN_PROGRESS', 'DONE', 'ON_HOLD');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TYPE team_role AS ENUM ('ADMIN', 'MEMBER', 'VIEWER');
+DO $$ BEGIN
+  CREATE TYPE team_role AS ENUM ('ADMIN', 'MEMBER', 'VIEWER');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TYPE invitation_status AS ENUM ('PENDING', 'ACCEPTED', 'DECLINED', 'EXPIRED');
+DO $$ BEGIN
+  CREATE TYPE invitation_status AS ENUM ('PENDING', 'ACCEPTED', 'DECLINED', 'EXPIRED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TYPE invitation_role AS ENUM ('MEMBER', 'VIEWER');
+DO $$ BEGIN
+  CREATE TYPE invitation_role AS ENUM ('MEMBER', 'VIEWER');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TYPE notification_type AS ENUM ('DUE_DATE_REMINDER', 'TEAM_INVITE', 'TODO_ASSIGNED');
+DO $$ BEGIN
+  CREATE TYPE notification_type AS ENUM ('DUE_DATE_REMINDER', 'TEAM_INVITE', 'TODO_ASSIGNED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TYPE category_owner_type AS ENUM ('USER', 'TEAM');
+DO $$ BEGIN
+  CREATE TYPE category_owner_type AS ENUM ('USER', 'TEAM');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TYPE audit_entity_type AS ENUM ('User', 'Todo', 'Category', 'Team', 'TeamMember', 'TeamInvitation');
+DO $$ BEGIN
+  CREATE TYPE audit_entity_type AS ENUM ('User', 'Todo', 'Category', 'Team', 'TeamMember', 'TeamInvitation');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TYPE audit_change_type AS ENUM ('CREATE', 'UPDATE', 'DELETE');
+DO $$ BEGIN
+  CREATE TYPE audit_change_type AS ENUM ('CREATE', 'UPDATE', 'DELETE');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 
 -- ---------------------------------------------------------------------------
 -- Table: users
 -- ---------------------------------------------------------------------------
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     user_id         UUID            NOT NULL DEFAULT gen_random_uuid(),
     email           VARCHAR(255)    NOT NULL,
     name            VARCHAR(100)    NOT NULL,
@@ -53,7 +71,7 @@ COMMENT ON COLUMN users.password_hash IS 'bcrypt 해시 비밀번호. 평문 저
 -- ---------------------------------------------------------------------------
 -- Table: teams
 -- ---------------------------------------------------------------------------
-CREATE TABLE teams (
+CREATE TABLE IF NOT EXISTS teams (
     team_id     UUID            NOT NULL DEFAULT gen_random_uuid(),
     name        VARCHAR(100)    NOT NULL,
     created_by  UUID            NOT NULL,
@@ -63,7 +81,7 @@ CREATE TABLE teams (
     CONSTRAINT pk_teams PRIMARY KEY (team_id),
     CONSTRAINT fk_teams_created_by FOREIGN KEY (created_by)
         REFERENCES users (user_id)
-        ON DELETE RESTRICT  -- 생성자 삭제 전 팀 삭제 필요
+        ON DELETE RESTRICT
 );
 
 COMMENT ON TABLE  teams            IS '협업 그룹. 생성자는 자동으로 ADMIN 부여 (TEAM-001).';
@@ -73,18 +91,15 @@ COMMENT ON COLUMN teams.created_by IS '팀 생성자. 사용자 탈퇴(하드 �
 -- ---------------------------------------------------------------------------
 -- Table: categories
 -- ---------------------------------------------------------------------------
--- owner_id 는 users.user_id 또는 teams.team_id 를 가리키는 polymorphic FK.
--- DB 수준 FK 제약 없이 owner_type 으로 구분하며 애플리케이션 레이어에서 무결성 관리.
-CREATE TABLE categories (
+CREATE TABLE IF NOT EXISTS categories (
     category_id UUID                    NOT NULL DEFAULT gen_random_uuid(),
     owner_id    UUID                    NOT NULL,
     owner_type  category_owner_type     NOT NULL,
     name        VARCHAR(100)            NOT NULL,
-    color       VARCHAR(7),                         -- HEX 코드 #RRGGBB (CAT-004)
+    color       VARCHAR(7),
     created_at  TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
 
     CONSTRAINT pk_categories PRIMARY KEY (category_id),
-    -- 동일 소유자 범위 내 카테고리명 중복 불가 (CAT-001)
     CONSTRAINT uq_categories_owner_name UNIQUE (owner_id, owner_type, name),
     CONSTRAINT ck_categories_color CHECK (color IS NULL OR color ~ '^#[0-9A-Fa-f]{6}$')
 );
@@ -98,11 +113,11 @@ COMMENT ON COLUMN categories.color      IS 'HEX 색상 코드 (#RRGGBB). nullabl
 -- ---------------------------------------------------------------------------
 -- Table: todos
 -- ---------------------------------------------------------------------------
-CREATE TABLE todos (
+CREATE TABLE IF NOT EXISTS todos (
     todo_id     UUID            NOT NULL DEFAULT gen_random_uuid(),
-    user_id     UUID,                               -- nullable: 팀 탈퇴·삭제 시 NULL (TEAM-004, TODO-010)
-    team_id     UUID,                               -- nullable: 개인 할일은 NULL (TODO-010)
-    category_id UUID,                               -- nullable: 카테고리 삭제 시 NULL (CAT-002)
+    user_id     UUID,
+    team_id     UUID,
+    category_id UUID,
     title       VARCHAR(500)    NOT NULL,
     description TEXT,
     status      todo_status     NOT NULL DEFAULT 'PLANNED',
@@ -114,22 +129,20 @@ CREATE TABLE todos (
     CONSTRAINT pk_todos PRIMARY KEY (todo_id),
     CONSTRAINT fk_todos_user FOREIGN KEY (user_id)
         REFERENCES users (user_id)
-        ON DELETE SET NULL,     -- 사용자 탈퇴(하드 삭제) 시 user_id = NULL
+        ON DELETE SET NULL,
     CONSTRAINT fk_todos_team FOREIGN KEY (team_id)
         REFERENCES teams (team_id)
-        ON DELETE CASCADE,      -- 팀 삭제 시 팀 할일 함께 삭제 (TEAM-005)
+        ON DELETE CASCADE,
     CONSTRAINT fk_todos_category FOREIGN KEY (category_id)
         REFERENCES categories (category_id)
-        ON DELETE SET NULL,     -- 카테고리 삭제 시 category_id = NULL (CAT-002)
-    -- due_date >= start_date (TODO-002)
+        ON DELETE SET NULL,
     CONSTRAINT ck_todos_date_order CHECK (
         start_date IS NULL OR due_date IS NULL OR due_date >= start_date
     ),
-    -- 개인 할일: user_id NOT NULL, team_id NULL / 팀 할일: team_id NOT NULL (TODO-010)
     CONSTRAINT ck_todos_ownership CHECK (
-        (team_id IS NULL AND user_id IS NOT NULL)   -- 개인 할일
+        (team_id IS NULL AND user_id IS NOT NULL)
         OR
-        (team_id IS NOT NULL)                        -- 팀 할일 (user_id nullable)
+        (team_id IS NOT NULL)
     )
 );
 
@@ -144,7 +157,7 @@ COMMENT ON COLUMN todos.due_date    IS '마감일. KST(UTC+9) 기준으로 오�
 -- ---------------------------------------------------------------------------
 -- Table: team_members
 -- ---------------------------------------------------------------------------
-CREATE TABLE team_members (
+CREATE TABLE IF NOT EXISTS team_members (
     team_member_id  UUID        NOT NULL DEFAULT gen_random_uuid(),
     team_id         UUID        NOT NULL,
     user_id         UUID        NOT NULL,
@@ -158,19 +171,18 @@ CREATE TABLE team_members (
     CONSTRAINT fk_team_members_user FOREIGN KEY (user_id)
         REFERENCES users (user_id)
         ON DELETE CASCADE,
-    -- 동일 팀 중복 가입 불가 (TEAM-003)
     CONSTRAINT uq_team_members_team_user UNIQUE (team_id, user_id)
 );
 
-COMMENT ON TABLE  team_members          IS '사용자-팀 N:M 연결. 팀 역할(ADMIN/MEMBER/VIEWER) 관리 (TEAM-002, TEAM-003).';
-COMMENT ON COLUMN team_members.role     IS '팀 내 역할. ADMIN 최소 1명 유지 규칙은 서비스 레이어에서 검증 (TEAM-002).';
+COMMENT ON TABLE  team_members           IS '사용자-팀 N:M 연결. 팀 역할(ADMIN/MEMBER/VIEWER) 관리 (TEAM-002, TEAM-003).';
+COMMENT ON COLUMN team_members.role      IS '팀 내 역할. ADMIN 최소 1명 유지 규칙은 서비스 레이어에서 검증 (TEAM-002).';
 COMMENT ON COLUMN team_members.joined_at IS '초대 수락 시점 (INV-003).';
 
 
 -- ---------------------------------------------------------------------------
 -- Table: team_invitations
 -- ---------------------------------------------------------------------------
-CREATE TABLE team_invitations (
+CREATE TABLE IF NOT EXISTS team_invitations (
     invitation_id   UUID                NOT NULL DEFAULT gen_random_uuid(),
     team_id         UUID                NOT NULL,
     invited_user_id UUID                NOT NULL,
@@ -179,7 +191,7 @@ CREATE TABLE team_invitations (
     status          invitation_status   NOT NULL DEFAULT 'PENDING',
     expires_at      TIMESTAMPTZ         NOT NULL,
     created_at      TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
-    responded_at    TIMESTAMPTZ,                    -- 수락/거절 시각. EXPIRED 처리 시 NULL 유지 가능
+    responded_at    TIMESTAMPTZ,
 
     CONSTRAINT pk_team_invitations PRIMARY KEY (invitation_id),
     CONSTRAINT fk_team_invitations_team FOREIGN KEY (team_id)
@@ -193,22 +205,22 @@ CREATE TABLE team_invitations (
         ON DELETE RESTRICT
 );
 
-COMMENT ON TABLE  team_invitations                  IS '팀 초대 요청. ADMIN만 생성 가능 (INV-001). 상태: PENDING→ACCEPTED|DECLINED|EXPIRED.';
-COMMENT ON COLUMN team_invitations.invited_by       IS '초대를 생성한 ADMIN. 삭제 전 초대 처리 필요 (RESTRICT).';
-COMMENT ON COLUMN team_invitations.role             IS '수락 시 team_members에 부여되는 역할. MEMBER 또는 VIEWER만 가능 (INV-001).';
-COMMENT ON COLUMN team_invitations.expires_at       IS '초대 만료 일시. 만료 초대는 수락 불가 (INV-005).';
-COMMENT ON COLUMN team_invitations.responded_at     IS '수락 또는 거절 처리 시각 (nullable).';
+COMMENT ON TABLE  team_invitations              IS '팀 초대 요청. ADMIN만 생성 가능 (INV-001). 상태: PENDING→ACCEPTED|DECLINED|EXPIRED.';
+COMMENT ON COLUMN team_invitations.invited_by   IS '초대를 생성한 ADMIN. 삭제 전 초대 처리 필요 (RESTRICT).';
+COMMENT ON COLUMN team_invitations.role         IS '수락 시 team_members에 부여되는 역할. MEMBER 또는 VIEWER만 가능 (INV-001).';
+COMMENT ON COLUMN team_invitations.expires_at   IS '초대 만료 일시. 만료 초대는 수락 불가 (INV-005).';
+COMMENT ON COLUMN team_invitations.responded_at IS '수락 또는 거절 처리 시각 (nullable).';
 
 
 -- ---------------------------------------------------------------------------
 -- Table: notifications
 -- ---------------------------------------------------------------------------
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     notification_id UUID                NOT NULL DEFAULT gen_random_uuid(),
     user_id         UUID                NOT NULL,
     type            notification_type   NOT NULL,
-    message         TEXT                NOT NULL,   -- 알림 내용
-    reference_id    UUID,                           -- polymorphic: invitation_id, todo_id 등 (nullable)
+    message         TEXT                NOT NULL,
+    reference_id    UUID,
     is_read         BOOLEAN             NOT NULL DEFAULT FALSE,
     created_at      TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
 
@@ -227,98 +239,81 @@ COMMENT ON COLUMN notifications.is_read      IS '읽음 여부. 기본값 false.
 -- ---------------------------------------------------------------------------
 -- Table: audit_logs
 -- ---------------------------------------------------------------------------
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
     audit_log_id    UUID                NOT NULL DEFAULT gen_random_uuid(),
     entity_type     audit_entity_type   NOT NULL,
     entity_id       UUID                NOT NULL,
     change_type     audit_change_type   NOT NULL,
-    actor_user_id   UUID,                           -- nullable: 사용자 하드 삭제 후 NULL 허용 (AUD-004)
-    before_value    JSONB,                          -- CREATE 시 NULL
-    after_value     JSONB,                          -- DELETE 시 NULL
-    metadata        JSONB,                          -- IP, User-Agent 등 추가 컨텍스트
+    actor_user_id   UUID,
+    before_value    JSONB,
+    after_value     JSONB,
+    metadata        JSONB,
     created_at      TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
 
     CONSTRAINT pk_audit_logs PRIMARY KEY (audit_log_id),
-    -- actor_user_id: 사용자 하드 삭제 후 고아 참조 허용 → FK 없이 nullable UUID로 관리
-    -- 감사 로그는 삭제하지 않는 것을 원칙으로 함 (불변 이력)
     CONSTRAINT fk_audit_logs_actor FOREIGN KEY (actor_user_id)
         REFERENCES users (user_id)
         ON DELETE SET NULL
 );
 
-COMMENT ON TABLE  audit_logs                IS '변경 이력 불변 로그. 6개 엔티티의 CUD 이벤트 기록 (AUD-001~004).';
-COMMENT ON COLUMN audit_logs.actor_user_id  IS '변경 수행자. 사용자 하드 삭제 시 SET NULL (AUD-004).';
-COMMENT ON COLUMN audit_logs.before_value   IS '변경 전 스냅샷(JSONB). CREATE 시 NULL. 민감정보 제외 (AUD-003).';
-COMMENT ON COLUMN audit_logs.after_value    IS '변경 후 스냅샷(JSONB). DELETE 시 NULL. 민감정보 제외 (AUD-003).';
-COMMENT ON COLUMN audit_logs.metadata       IS 'IP, User-Agent 등 추가 컨텍스트 (JSONB, nullable).';
+COMMENT ON TABLE  audit_logs               IS '변경 이력 불변 로그. 6개 엔티티의 CUD 이벤트 기록 (AUD-001~004).';
+COMMENT ON COLUMN audit_logs.actor_user_id IS '변경 수행자. 사용자 하드 삭제 시 SET NULL (AUD-004).';
+COMMENT ON COLUMN audit_logs.before_value  IS '변경 전 스냅샷(JSONB). CREATE 시 NULL. 민감정보 제외 (AUD-003).';
+COMMENT ON COLUMN audit_logs.after_value   IS '변경 후 스냅샷(JSONB). DELETE 시 NULL. 민감정보 제외 (AUD-003).';
+COMMENT ON COLUMN audit_logs.metadata      IS 'IP, User-Agent 등 추가 컨텍스트 (JSONB, nullable).';
 
 
 -- ---------------------------------------------------------------------------
 -- Table: refresh_tokens
 -- ---------------------------------------------------------------------------
-CREATE TABLE refresh_tokens (
+CREATE TABLE IF NOT EXISTS refresh_tokens (
     token_id    UUID            NOT NULL DEFAULT gen_random_uuid(),
     user_id     UUID            NOT NULL,
     token_hash  VARCHAR(255)    NOT NULL,
     expires_at  TIMESTAMPTZ     NOT NULL,
     created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    revoked_at  TIMESTAMPTZ,                        -- NULL=유효, NOT NULL=폐기 (로그아웃·탈퇴)
+    revoked_at  TIMESTAMPTZ,
 
     CONSTRAINT pk_refresh_tokens PRIMARY KEY (token_id),
     CONSTRAINT fk_refresh_tokens_user FOREIGN KEY (user_id)
         REFERENCES users (user_id)
-        ON DELETE CASCADE   -- 사용자 탈퇴(하드 삭제) 시 토큰도 함께 삭제
+        ON DELETE CASCADE
 );
 
-COMMENT ON TABLE  refresh_tokens              IS '리프레시 토큰. 로그아웃·탈퇴 시 즉시 무효화 (AUTH-006).';
-COMMENT ON COLUMN refresh_tokens.token_hash   IS '실제 토큰 대신 해시값 저장. DB 탈취 시 토큰 노출 방지.';
-COMMENT ON COLUMN refresh_tokens.revoked_at   IS 'NULL=유효. NOT NULL=폐기. 로그아웃·탈퇴 시 현재 시각으로 설정.';
+COMMENT ON TABLE  refresh_tokens            IS '리프레시 토큰. 로그아웃·탈퇴 시 즉시 무효화 (AUTH-006).';
+COMMENT ON COLUMN refresh_tokens.token_hash IS '실제 토큰 대신 해시값 저장. DB 탈취 시 토큰 노출 방지.';
+COMMENT ON COLUMN refresh_tokens.revoked_at IS 'NULL=유효. NOT NULL=폐기. 로그아웃·탈퇴 시 현재 시각으로 설정.';
 
 
 -- =============================================================================
--- Indexes
+-- Indexes (IF NOT EXISTS)
 -- =============================================================================
 
--- users
-CREATE INDEX idx_users_email ON users (email);
+CREATE INDEX IF NOT EXISTS idx_users_email             ON users (email);
 
--- todos
-CREATE INDEX idx_todos_user_id     ON todos (user_id);
-CREATE INDEX idx_todos_team_id     ON todos (team_id);
-CREATE INDEX idx_todos_category_id ON todos (category_id);
-CREATE INDEX idx_todos_status      ON todos (status);
-CREATE INDEX idx_todos_due_date    ON todos (due_date);                 -- 오늘/이번 주 조회 (TODO-005, TODO-006)
-CREATE INDEX idx_todos_title_trgm  ON todos USING gin (title gin_trgm_ops); -- 제목 키워드 검색 (UC-T09). pg_trgm 확장 필요
+CREATE INDEX IF NOT EXISTS idx_todos_user_id           ON todos (user_id);
+CREATE INDEX IF NOT EXISTS idx_todos_team_id           ON todos (team_id);
+CREATE INDEX IF NOT EXISTS idx_todos_category_id       ON todos (category_id);
+CREATE INDEX IF NOT EXISTS idx_todos_status            ON todos (status);
+CREATE INDEX IF NOT EXISTS idx_todos_due_date          ON todos (due_date);
+CREATE INDEX IF NOT EXISTS idx_todos_title_trgm        ON todos USING gin (title gin_trgm_ops);
 
--- categories
-CREATE INDEX idx_categories_owner  ON categories (owner_id, owner_type);
+CREATE INDEX IF NOT EXISTS idx_categories_owner        ON categories (owner_id, owner_type);
 
--- team_members
-CREATE INDEX idx_team_members_team ON team_members (team_id);
-CREATE INDEX idx_team_members_user ON team_members (user_id);
+CREATE INDEX IF NOT EXISTS idx_team_members_team       ON team_members (team_id);
+CREATE INDEX IF NOT EXISTS idx_team_members_user       ON team_members (user_id);
 
--- team_invitations
-CREATE INDEX idx_team_invitations_team         ON team_invitations (team_id);
-CREATE INDEX idx_team_invitations_invited_user ON team_invitations (invited_user_id);
-CREATE INDEX idx_team_invitations_status       ON team_invitations (status);
+CREATE INDEX IF NOT EXISTS idx_team_invitations_team         ON team_invitations (team_id);
+CREATE INDEX IF NOT EXISTS idx_team_invitations_invited_user ON team_invitations (invited_user_id);
+CREATE INDEX IF NOT EXISTS idx_team_invitations_status       ON team_invitations (status);
 
--- notifications
-CREATE INDEX idx_notifications_user     ON notifications (user_id);
-CREATE INDEX idx_notifications_is_read  ON notifications (user_id, is_read);
-CREATE INDEX idx_notifications_created  ON notifications (created_at DESC);    -- 최신순 정렬 (NOTIF-003)
+CREATE INDEX IF NOT EXISTS idx_notifications_user      ON notifications (user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_is_read   ON notifications (user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_created   ON notifications (created_at DESC);
 
--- audit_logs
-CREATE INDEX idx_audit_logs_entity      ON audit_logs (entity_type, entity_id);
-CREATE INDEX idx_audit_logs_actor       ON audit_logs (actor_user_id);
-CREATE INDEX idx_audit_logs_created     ON audit_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_entity       ON audit_logs (entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_actor        ON audit_logs (actor_user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created      ON audit_logs (created_at DESC);
 
--- refresh_tokens
-CREATE INDEX idx_refresh_tokens_user    ON refresh_tokens (user_id);
-CREATE INDEX idx_refresh_tokens_hash    ON refresh_tokens (token_hash);
-
-
--- =============================================================================
--- NOTE: pg_trgm 확장이 필요한 경우 아래 명령을 먼저 실행
--- CREATE EXTENSION IF NOT EXISTS pg_trgm;
--- (idx_todos_title_trgm 인덱스는 pg_trgm 활성화 후 생성 가능)
--- =============================================================================
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user     ON refresh_tokens (user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash     ON refresh_tokens (token_hash);

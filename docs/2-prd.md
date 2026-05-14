@@ -2,8 +2,8 @@
 
 | 항목      | 내용                               |
 | --------- | ---------------------------------- |
-| 문서 버전 | v1.4                               |
-| 작성일    | 2026-05-13                         |
+| 문서 버전 | v1.5                               |
+| 작성일    | 2026-05-14                         |
 | 작성자    | Product Manager                    |
 | 검토자    | 미정                               |
 | 승인자    | 미정                               |
@@ -89,7 +89,7 @@ Todolist-App은 개인의 할일을 체계적으로 관리하고, 팀 멤버와 
 | UC-M03 | 팀 멤버 역할 변경 | ✅ 1차    |
 | UC-M04 | 팀 멤버 추방      | ✅ 1차    |
 | UC-M05 | 팀 탈퇴           | ✅ 1차    |
-| UC-M06 | 팀 할일 목록 조회 | ✅ 1차    |
+| UC-M06 | 팀 할일 목록 조회 | ✅ 1차 (`GET /todos?teamId=...` 필터로 구현) |
 | UC-M07 | 팀 정보 수정      | ✅ 1차    |
 | UC-M08 | 팀 삭제           | ✅ 1차    |
 | UC-M09 | 팀 초대 수락      | ✅ 1차    |
@@ -123,6 +123,11 @@ Todolist-App은 개인의 할일을 체계적으로 관리하고, 팀 멤버와 
 - 중복 이메일 가입 불가 (USR-001)
 - 가입 완료 시 기본 카테고리 자동 생성: 업무, 개인, 학습, 회의, 프로젝트, 긴급 업무 (CAT-003)
 
+#### UC-A02 이메일 중복 확인
+
+- 별도 엔드포인트 없이 회원가입 요청 처리 시 서버에서 중복 여부를 검증하여 409 반환
+- 클라이언트는 `POST /auth/register` 응답으로 중복 여부를 확인한다
+
 #### UC-A03 로그인
 
 - 이메일/비밀번호 인증
@@ -149,7 +154,8 @@ Todolist-App은 개인의 할일을 체계적으로 관리하고, 팀 멤버와 
 - 진행 상태는 PLANNED, IN_PROGRESS, DONE, ON_HOLD 중 하나여야 함 (TODO-003)
 - 진행 상태 기본값: PLANNED
 - 개인 할일 생성 시 `user_id` 필수, `team_id`는 NULL (TODO-010)
-- 팀 할일 생성 시 `team_id` 필수, `user_id`는 생성자 참조로 저장하되 nullable; ADMIN 또는 MEMBER 역할 필요 (AUTH-003, TODO-010)
+- 팀 할일 생성 시 `team_id` 필수, `user_id = NULL`로 저장; ADMIN 또는 MEMBER 역할 필요 (AUTH-003, TODO-010)
+  - 팀 탈퇴·삭제 이후에도 팀 할일의 `user_id`는 NULL 상태 유지 (생성자 추적 불가, TEAM-004)
 
 #### UC-T02 할일 수정
 
@@ -208,7 +214,7 @@ Todolist-App은 개인의 할일을 체계적으로 관리하고, 팀 멤버와 
 - 팀 생성자는 자동으로 ADMIN 역할 부여 (TEAM-001)
 - 팀에 최소 1명의 ADMIN 상시 유지; 마지막 ADMIN은 역할 변경·탈퇴 불가 (TEAM-002)
 - 동일 팀 중복 가입 불가 (TEAM-003)
-- 탈퇴 시 해당 사용자가 생성한 팀 할일 소유권은 `team_id` 기준으로 팀에 귀속되며, 해당 할일의 `user_id`는 NULL 처리 가능 (TEAM-004, TODO-010)
+- 탈퇴 시 해당 사용자가 생성한 팀 할일의 `user_id`는 이미 NULL이므로 추가 처리 없이 팀에 귀속된 상태 유지 (TEAM-004, TODO-010)
 - 팀 삭제 시 팀의 모든 할일·카테고리 함께 삭제; 멤버 개인 할일 영향 없음 (TEAM-005)
 
 **역할별 권한**
@@ -235,6 +241,7 @@ Todolist-App은 개인의 할일을 체계적으로 관리하고, 팀 멤버와 
 - ADMIN은 기존 사용자에게 MEMBER 또는 VIEWER 역할로 팀 초대를 생성할 수 있다 (INV-001).
 - 이미 팀에 소속된 사용자 또는 동일 팀에 PENDING 초대가 있는 사용자는 초대할 수 없다 (TEAM-003, INV-002).
 - 초대 생성 시 `TEAM_INVITE` 인앱 알림을 발송한다 (NOTIF-002).
+- 초대 유효 기간: **7일** (`expires_at = 생성일 + 7일`)
 
 **UC-M09 팀 초대 수락**
 
@@ -353,7 +360,7 @@ Todolist-App은 개인의 할일을 체계적으로 관리하고, 팀 멤버와 
 | 항목 | 기술 | 버전 |
 |------|------|------|
 | 런타임 | Node.js | 22 LTS |
-| 언어 | TypeScript | 5.x |
+| 언어 | **JavaScript (ESM, `"type": "module"`)** | ES2022 |
 | 프레임워크 | Express | 5.x |
 | API 방식 | REST API | — |
 | 인증 | JWT (jsonwebtoken) + bcrypt | latest |
@@ -452,6 +459,7 @@ Todolist-App은 개인의 할일을 체계적으로 관리하고, 팀 멤버와 
 | v1.2 | 2026-05-13 | Product Manager | 도메인 정의서 검토 반영: AUTH-002·AUTH-004·AUTH-005 권한 규칙 추가, UC-T02·UC-T03 요구사항 상세 추가, UC-M09·UC-M10 요구사항 상세 추가, TODO-003 유효성 규칙 추가, DONE→IN_PROGRESS 전이 설명 추가, Category owner_type 구조 명시, 알림 채널(인앱/이메일) 구분 명시, 감사 로그 대상에 User 추가 |
 | v1.3 | 2026-05-13 | Product Manager | 도메인 정의서 v1.3 정합화: 탈퇴 이메일 재가입 금지 삭제, Todo.user_id nullable 반영, TeamInvitation 모델 요구사항 및 AuditLog 보존·민감정보 제외 기준 보완 |
 | v1.4 | 2026-05-13 | Product Manager | 기술 스택 확정 반영 (섹션 5): 프론트엔드(TypeScript 5.x, React 19, Vite 6.x, TanStack Query v5, Zustand 5.x, Tailwind CSS v3, Axios 1.x, React Router v7, React Hook Form 7.x, Vitest+RTL), 백엔드(Node.js 22 LTS, Express 5.x, pg 8.x, Zod 3.x, Winston 3.x, swagger-jsdoc 6.x, Jest+Supertest), 인프라(pnpm, Docker+docker-compose, Nodemailer+SMTP). DB 마이그레이션 도구 제외. |
+| v1.5 | 2026-05-14 | Backend Developer | 백엔드 구현 결과 반영: 백엔드 언어 TypeScript → JavaScript (ESM) 수정. UC-A02 이메일 중복 확인은 별도 엔드포인트 없이 회원가입 시 통합 처리. UC-M06 팀 할일 목록 조회는 `GET /todos?teamId=...` 필터로 구현. UC-T01 팀 할일 `user_id = NULL` 생성 방식 명시. 팀 초대 유효 기간 7일 명시. TEAM-004 탈퇴 처리 설명 수정. |
 
 ---
 

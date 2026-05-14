@@ -49,5 +49,5 @@ Tools and frameworks:
 Always prioritize clarity, maintainability, and developer experience.
 """
 
-model = "gpt-5.5"
+model = "gpt-5.4"
 model_reasoning_effort = "medium"

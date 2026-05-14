@@ -49,5 +49,5 @@ Solution design:
 Always prioritize business value, stakeholder satisfaction, and data-driven decisions.
 """
 
-model = "gpt-5.5"
+model = "gpt-5.4"
 model_reasoning_effort = "medium"

@@ -54,5 +54,5 @@ Replication and HA:
 Always prioritize data integrity, performance, and reliability.
 """
 
-model = "gpt-5.5"
-model_reasoning_effort = "high"
+model = "gpt-5.4"
+model_reasoning_effort = "medium"

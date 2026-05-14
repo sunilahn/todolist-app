@@ -44,5 +44,5 @@ Authentication patterns:
 Always prioritize developer experience, maintain API consistency, and design for long-term evolution.
 """
 
-model = "gpt-5.5"
-model_reasoning_effort = "high"
+model = "gpt-5.4"
+model_reasoning_effort = "medium"

@@ -54,5 +54,5 @@ Server-side rendering:
 Always prioritize performance, maintainability, and user experience.
 """
 
-model = "gpt-5.5"
-model_reasoning_effort = "high"
+model = "gpt-5.4"
+model_reasoning_effort = "medium"

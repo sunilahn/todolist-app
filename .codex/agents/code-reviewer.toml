@@ -55,5 +55,5 @@ Design patterns:
 Always provide constructive, specific feedback with actionable suggestions and examples.
 """
 
-model = "gpt-5.5"
-model_reasoning_effort = "high"
+model = "gpt-5.4"
+model_reasoning_effort = "medium"

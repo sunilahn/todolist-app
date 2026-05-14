@@ -2,10 +2,10 @@
 
 | 항목 | 내용 |
 |------|------|
-| 문서 버전 | v1.2 |
-| 작성일 | 2026-05-13 |
+| 문서 버전 | v1.3 |
+| 작성일 | 2026-05-14 |
 | 참조 문서 | docs/2-prd.md (v1.4) |
-| 상태 | 초안 |
+| 상태 | 업데이트 (백엔드 구현 기반 반영) |
 
 ### 적용 기술 스택
 
@@ -29,13 +29,14 @@
 | 구분 | 기술 | 버전 |
 |------|------|------|
 | 런타임 | Node.js | 22 LTS |
-| 언어 | TypeScript | 5.x |
+| 언어 | **JavaScript (ESM, `"type": "module"`)** | ES2022 |
 | 웹 프레임워크 | Express | 5.x |
 | DB 클라이언트 | pg (node-postgres) — **ORM 금지** | 8.x |
 | 인증 | jsonwebtoken + bcrypt | - |
 | 입력 검증 | Zod | 3.x |
 | 로깅 | Winston | 3.x |
-| API 문서 | swagger-jsdoc | 6.x |
+| API 문서 | swagger-jsdoc + swagger-ui-express | 6.x |
+| 스케줄러 | node-cron | - |
 | 테스트 | Jest + Supertest | - |
 
 #### 데이터베이스 / 인프라
@@ -80,9 +81,10 @@ UI 렌더링, 상태 관리, API 통신, 비즈니스 로직, 데이터 접근�
 
 상위 레이어는 하위 레이어를 참조할 수 있으나, 하위 레이어가 상위 레이어를 역참조하는 구조를 금지한다. 의존 방향의 역전은 반드시 인터페이스 또는 콜백을 통해 처리한다.
 
-### 1.4 TypeScript strict 모드 필수
+### 1.4 타입 안전성
 
-프론트엔드와 백엔드 양측 모두 `tsconfig.json`에서 `"strict": true`를 설정하여 타입 안전성을 보장한다. `any` 타입 사용은 원칙적으로 금지하며, 불가피한 경우 `// eslint-disable` 주석과 함께 이유를 명시한다.
+- **프론트엔드**: TypeScript 5.x를 사용하며 `tsconfig.json`에서 `"strict": true`를 설정하여 타입 안전성을 보장한다. `any` 타입 사용은 원칙적으로 금지하며, 불가피한 경우 `// eslint-disable` 주석과 함께 이유를 명시한다.
+- **백엔드**: JavaScript (ESM)를 사용한다. TypeScript 대신 JSDoc 기반 인라인 타입 힌트 또는 Zod 스키마를 통해 런타임 타입 안전성을 확보한다.
 
 ### 1.5 환경 변수 기반 설정, 하드코딩 금지
 
@@ -102,10 +104,10 @@ JWT 시크릿, DB 비밀번호, 외부 서비스 API 키 등 모든 민감 정�
 
 ### 2.1 백엔드 레이어 (3-tier)
 
-백엔드는 다음 4단계 레이어로 구성되며, 요청은 위에서 아래로 단방향으로 흐른다.
+백엔드는 다음 3단계 레이어로 구성되며, 요청은 위에서 아래로 단방향으로 흐른다.
 
 ```
-Router → Controller → Service → Repository → DB
+Router → Controller → Service → DB (pg.Pool)
 ```
 
 #### Router (라우터)
@@ -113,6 +115,7 @@ Router → Controller → Service → Repository → DB
 - Express 라우터를 사용하여 HTTP 메서드와 URL 경로를 정의한다.
 - 미들웨어(JWT 인증, 입력 검증, 로깅 등)를 연결하는 역할만 담당한다.
 - 비즈니스 로직을 포함하지 않는다. Controller 함수를 호출하는 것이 유일한 책임이다.
+- 라우터 파일에 `@swagger` JSDoc 주석을 작성하여 Swagger 문서를 자동 생성한다.
 
 #### Controller (컨트롤러)
 
@@ -125,20 +128,13 @@ Router → Controller → Service → Repository → DB
 
 - 비즈니스 로직 전담 레이어다. 도메인 규칙(상태 전이 검증, 권한 검증, 날짜 기준 계산 등)을 구현한다.
 - 예: `TODO-008` 상태 전이 매트릭스 검증, `TEAM-002` 마지막 ADMIN 보호, `TODO-009` KST 날짜 기준 계산
-- 복수의 Repository를 조합하거나, 트랜잭션을 조율하여 데이터 일관성을 보장한다.
-- DB에 직접 접근하지 않는다. 반드시 Repository를 경유한다.
-
-#### Repository (레포지토리)
-
-- DB 쿼리를 전담하는 레이어다.
-- `pg` 라이브러리(node-postgres)를 직접 사용하여 SQL 쿼리를 작성한다.
-- ORM(TypeORM, Prisma, Sequelize 등) 사용을 금지한다.
-- 비즈니스 로직을 포함하지 않는다. 단순 CRUD 및 조건 조회 SQL 실행이 유일한 책임이다.
-- 트랜잭션이 필요한 경우 `pg.PoolClient`를 Service로부터 전달받아 동일 트랜잭션 내에서 실행한다.
+- `pg.Pool`을 직접 사용하여 SQL 쿼리를 실행한다. ORM(TypeORM, Prisma, Sequelize 등) 사용을 금지한다.
+- 트랜잭션이 필요한 경우 `pg.PoolClient`를 사용하여 동일 트랜잭션 내에서 실행한다.
+- 파라미터 바인딩(`$1`, `$2` 형식)을 사용하여 SQL 인젝션을 방지한다.
 
 #### 레이어 간 역방향 참조 금지
 
-Repository가 Service를 import하거나, Controller가 Repository를 직접 호출하는 구조를 금지한다. 의존 방향은 항상 `Router → Controller → Service → Repository` 단방향을 유지한다.
+Controller가 다른 도메인의 Service를 직접 호출하거나, 순환 의존이 발생하는 구조를 금지한다. 의존 방향은 항상 `Router → Controller → Service` 단방향을 유지한다.
 
 ### 2.2 프론트엔드 레이어
 
@@ -178,7 +174,7 @@ Page → Feature/Component → Hook → API Client → Server
 |------|------|
 | 상위 레이어만 하위 레이어 참조 | Page → Feature, Feature → Hook, Hook → API Client 방향만 허용 |
 | 도메인 로직은 Service에만 존재 | 백엔드 비즈니스 규칙은 Service 레이어에 집중 |
-| DB 직접 접근은 Repository에만 허용 | Service, Controller에서 `pg` 직접 사용 금지 |
+| DB 접근은 Service에서 직접 수행 | `pg.Pool`을 Service에서 직접 사용. Controller에서 직접 DB 접근 금지 |
 | 프론트엔드 서버 상태는 TanStack Query 관리 | 서버 데이터를 Zustand에 직접 저장하는 패턴 금지 |
 | 프론트엔드 클라이언트 상태는 Zustand 관리 | 인증 상태, UI 상태 등 서버와 무관한 상태에 사용 |
 
@@ -192,14 +188,14 @@ Page → Feature/Component → Hook → API Client → Server
 |-----------|------|------|
 | React 컴포넌트 | PascalCase, `.tsx` 확장자 | `TodoList.tsx`, `TodoCard.tsx`, `LoginForm.tsx` |
 | React 훅 | camelCase, `use` prefix, `.ts` 확장자 | `useTodos.ts`, `useAuth.ts`, `useCreateTodo.ts` |
-| 백엔드 서비스 | camelCase, `.service.ts` suffix | `todoService.ts`, `authService.ts` |
-| 백엔드 레포지토리 | camelCase, `.repository.ts` suffix | `todoRepository.ts`, `userRepository.ts` |
-| 백엔드 컨트롤러 | camelCase, `.controller.ts` suffix | `todoController.ts`, `authController.ts` |
-| 백엔드 라우터 | kebab-case, `.router.ts` suffix | `todo-router.ts`, `auth-router.ts` |
-| 타입/인터페이스 정의 | PascalCase, `.types.ts` suffix | `TodoStatus.ts`, `UserDto.ts`, `todo.types.ts` |
-| 미들웨어 | camelCase, `.middleware.ts` suffix | `auth.middleware.ts`, `error.middleware.ts` |
-| 유틸리티 | camelCase, `.ts` 확장자 | `dateUtils.ts`, `jwtUtils.ts` |
-| 상수 파일 | camelCase 또는 도메인명, `.ts` 확장자 | `todoConstants.ts`, `errorCodes.ts` |
+| 백엔드 서비스 | kebab-case 도메인, `.service.js` suffix | `todo.service.js`, `auth.service.js` |
+| 백엔드 컨트롤러 | kebab-case 도메인, `.controller.js` suffix | `todo.controller.js`, `auth.controller.js` |
+| 백엔드 라우터 | kebab-case 도메인, `.router.js` suffix | `todo.router.js`, `auth.router.js` |
+| 백엔드 스케줄러 | kebab-case 도메인, `.scheduler.js` suffix | `notification.scheduler.js` |
+| 미들웨어 | kebab-case, `.middleware.js` suffix | `auth.middleware.js`, `error.middleware.js` |
+| 백엔드 유틸리티 | camelCase, `.js` 확장자 | `dateUtils.js`, `jwtUtils.js` |
+| 프론트엔드 타입/인터페이스 | PascalCase, `.types.ts` suffix | `TodoStatus.ts`, `UserDto.ts`, `todo.types.ts` |
+| 프론트엔드 상수 | camelCase 또는 도메인명, `.ts` 확장자 | `todoConstants.ts`, `errorCodes.ts` |
 
 ### 3.2 변수/함수명 규칙
 
@@ -217,21 +213,22 @@ Page → Feature/Component → Hook → API Client → Server
 
 **Boolean 변수**: `is`, `has`, `can` prefix를 사용한다.
 
-```typescript
-const isRead: boolean;         // 알림 읽음 여부 (Notification.is_read)
-const hasPermission: boolean;  // 권한 보유 여부
-const canDelete: boolean;      // 삭제 가능 여부
-const isExpired: boolean;      // 초대 만료 여부
+```js
+const isRead = false;        // 알림 읽음 여부 (Notification.is_read)
+const hasPermission = true;  // 권한 보유 여부
+const canDelete = false;     // 삭제 가능 여부
+const isExpired = false;     // 초대 만료 여부
 ```
 
 **상수**: UPPER_SNAKE_CASE를 사용한다.
 
-```typescript
+```js
 const MAX_PAGE_SIZE = 100;
 const JWT_ACCESS_TOKEN_EXPIRES_IN = '1h';
 const JWT_REFRESH_TOKEN_EXPIRES_IN = '7d';
 const PASSWORD_RESET_LINK_EXPIRES_MINUTES = 30;
-const TODO_STATUS = { PLANNED: 'PLANNED', IN_PROGRESS: 'IN_PROGRESS', DONE: 'DONE', ON_HOLD: 'ON_HOLD' } as const;
+const INVITATION_EXPIRY_DAYS = 7;
+const TODO_STATUS = Object.freeze({ PLANNED: 'PLANNED', IN_PROGRESS: 'IN_PROGRESS', DONE: 'DONE', ON_HOLD: 'ON_HOLD' });
 ```
 
 **DB 컬럼명**: snake_case를 사용한다 (PostgreSQL 관례).
@@ -241,7 +238,7 @@ user_id, due_date, is_read, created_at, updated_at,
 actor_user_id, before_value, after_value, owner_type
 ```
 
-**TypeScript 인터페이스**: I prefix를 사용하지 않으며, 순수 PascalCase를 사용한다.
+**프론트엔드 TypeScript 인터페이스**: I prefix를 사용하지 않으며, 순수 PascalCase를 사용한다.
 
 ```typescript
 // 올바른 예
@@ -252,6 +249,8 @@ interface ApiResponse<T> { ... }
 // 금지된 예
 interface ITodo { ... }
 ```
+
+> **백엔드 참고**: 백엔드는 JavaScript를 사용하므로 별도 인터페이스 정의 파일이 없다. 입력 스키마는 Zod로, 런타임 타입 검증을 담당한다.
 
 ### 3.3 API 엔드포인트 네이밍 (REST)
 
@@ -283,30 +282,34 @@ REST 설계 원칙에 따라 명사 복수형 리소스를 사용한다.
 | `GET` | `/teams/:teamId` | 팀 상세 조회 |
 | `PATCH` | `/teams/:teamId` | 팀 정보 수정 |
 | `DELETE` | `/teams/:teamId` | 팀 삭제 |
-| `GET` | `/teams/:teamId/todos` | 팀 할일 목록 조회 |
 | `GET` | `/teams/:teamId/members` | 팀 멤버 목록 조회 |
 | `PATCH` | `/teams/:teamId/members/:userId/role` | 팀 멤버 역할 변경 |
+| `DELETE` | `/teams/:teamId/members/me` | 팀 탈퇴 |
 | `DELETE` | `/teams/:teamId/members/:userId` | 팀 멤버 추방 |
 | `POST` | `/teams/:teamId/invitations` | 팀 초대 생성 |
+| `GET` | `/teams/:teamId/invitations` | 팀 초대 목록 조회 (ADMIN) |
 | `PATCH` | `/invitations/:invitationId/accept` | 팀 초대 수락 |
 | `PATCH` | `/invitations/:invitationId/decline` | 팀 초대 거절 |
 
-**인증/알림**
+> **참고**: 팀 할일 목록은 별도 엔드포인트(`GET /teams/:teamId/todos`) 없이 `GET /todos?teamId=...` 쿼리 파라미터로 필터링하여 조회한다.
+
+**인증/사용자/알림**
 
 | HTTP 메서드 | 엔드포인트 | 설명 |
 |-------------|------------|------|
-| `POST` | `/auth/register` | 회원가입 |
+| `POST` | `/auth/register` | 회원가입 (기본 카테고리 6개 자동 생성) |
 | `POST` | `/auth/login` | 로그인 |
-| `POST` | `/auth/logout` | 로그아웃 |
+| `POST` | `/auth/logout` | 로그아웃 (리프레시 토큰 폐기) |
 | `POST` | `/auth/refresh` | 액세스 토큰 갱신 |
-| `POST` | `/auth/password-reset/request` | 비밀번호 재설정 요청 |
+| `POST` | `/auth/password-reset/request` | 비밀번호 재설정 요청 (이메일 발송) |
 | `POST` | `/auth/password-reset/confirm` | 비밀번호 재설정 확인 |
 | `GET` | `/users/me` | 내 정보 조회 |
 | `PATCH` | `/users/me` | 내 정보 수정 |
-| `DELETE` | `/users/me` | 회원 탈퇴 |
-| `GET` | `/notifications` | 알림 목록 조회 |
-| `PATCH` | `/notifications/:id/read` | 알림 읽음 처리 |
+| `DELETE` | `/users/me` | 회원 탈퇴 (하드 삭제) |
+| `GET` | `/notifications` | 알림 목록 조회 (최신순) |
 | `PATCH` | `/notifications/read-all` | 전체 알림 읽음 처리 |
+| `PATCH` | `/notifications/:id/read` | 단건 알림 읽음 처리 |
+| `GET` | `/health` | 서버·DB 상태 확인 |
 
 **에러 응답 포맷**
 
@@ -350,25 +353,31 @@ features/
 
 ### 4.1 테스트 파일 위치
 
-소스 파일과 동일 디렉토리 또는 `__tests__/` 하위 디렉토리에 위치시킨다.
+백엔드 테스트는 `tests/` 디렉토리 하위에 도메인별로 분리하여 배치한다.
 
 ```
-# 동일 디렉토리 방식 (권장)
-modules/todo/
-├── todo.service.ts
-├── todo.service.test.ts
-├── todo.repository.ts
-└── todo.repository.test.ts
-
-# __tests__ 방식
-tests/
-├── unit/
-│   └── todo/
-│       └── todoService.test.ts
-└── integration/
-    └── todo/
-        └── todoRepository.test.ts
+backend/tests/
+├── setup.js                    # Jest 전역 설정 (환경 변수, 테스트 DB 풀)
+└── integration/                # 실제 DB 연결 통합 테스트 (단위 테스트 미분리)
+    ├── auth/
+    │   └── auth.test.js
+    ├── user/
+    │   └── user.test.js
+    ├── todo/
+    │   └── todo.test.js
+    ├── category/
+    │   └── category.test.js
+    ├── team/
+    │   └── team.test.js
+    ├── notification/
+    │   └── notification.test.js
+    ├── audit/
+    │   └── audit.test.js
+    └── swagger/
+        └── swagger.test.js
 ```
+
+> **참고**: 백엔드는 Repository 레이어가 없으므로 Service 단위 테스트를 별도로 분리하지 않는다. 통합 테스트에서 실제 DB를 사용하여 Service, Controller, DB 레이어를 함께 검증한다. 프론트엔드는 Vitest + RTL 기반 단위 테스트를 별도로 작성한다.
 
 ### 4.2 단위 테스트 (Unit Test)
 
@@ -420,10 +429,17 @@ Repository 레이어는 실제 PostgreSQL(테스트 전용 DB 인스턴스)에 �
 
 Pull Request 머지 전 다음 항목이 모두 통과해야 한다.
 
+**백엔드**
+
+1. `eslint` 검사 통과 (lint 에러 0건)
+2. 통합 테스트 전체 통과 (`pnpm test`)
+3. 전체 커버리지 80% 이상 유지 (Statements / Lines / Functions ≥ 80%, Branches ≥ 70%)
+
+**프론트엔드**
+
 1. `eslint` 검사 통과 (lint 에러 0건)
 2. `tsc --noEmit` 타입 검사 통과
-3. 단위 테스트 전체 통과
-4. Service 레이어 커버리지 80% 이상 유지
+3. Vitest 단위 테스트 전체 통과
 
 ---
 
@@ -491,15 +507,19 @@ EMAIL_FROM_ADDRESS
 - 풀 인스턴스는 싱글톤으로 관리한다. 요청마다 새 Pool을 생성하는 것을 금지한다.
 - 500 CCU 목표(`PRD 4.1`)에 맞게 풀 크기를 설정한다.
 
-```typescript
-// config/database.ts
-const pool = new Pool({
+```js
+// config/database.js
+import pg from 'pg';
+
+const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   min: parseInt(process.env.DATABASE_POOL_MIN || '5'),
   max: parseInt(process.env.DATABASE_POOL_MAX || '20'),
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
 });
+
+export default pool;
 ```
 
 ### 5.6 감사 로그 (Audit Log)
@@ -526,10 +546,10 @@ const pool = new Pool({
 
 ### 5.7 입력 검증 및 SQL 인젝션 방지
 
-- 모든 API 요청의 바디, 파라미터, 쿼리스트링은 `validate.middleware.ts`에서 스키마 기반으로 검증한다.
+- 모든 API 요청의 바디, 파라미터, 쿼리스트링은 `validate.middleware.js`에서 Zod 스키마 기반으로 검증한다.
 - `pg` 라이브러리의 파라미터 바인딩(`$1`, `$2` 형식)을 사용하여 SQL 인젝션을 방지한다. 문자열 연결 방식의 쿼리 조립을 금지한다.
 
-```typescript
+```js
 // 올바른 예 (파라미터 바인딩)
 const result = await pool.query(
   'SELECT * FROM todos WHERE user_id = $1 AND status = $2',
@@ -546,107 +566,100 @@ const result = await pool.query(
 
 ## 6. 백엔드 디렉토리 구조
 
-도메인 기반 모듈형 구조를 채택한다. 각 도메인 모듈은 router, controller, service, repository, types를 동일 디렉토리 내에 응집하여 관리한다.
+도메인 기반 모듈형 구조를 채택한다. 각 도메인 모듈은 router, controller, service를 동일 디렉토리 내에 응집하여 관리한다. 백엔드는 JavaScript (ESM) 기반으로 구현되어 있으며 Repository 레이어 없이 Service에서 `pg.Pool`에 직접 접근한다.
 
 ```
 backend/
 ├── src/
-│   ├── app.ts                        # Express 앱 초기화, 미들웨어 등록, 라우터 마운트
-│   ├── server.ts                     # HTTP 서버 진입점, 포트 바인딩, 종료 처리
+│   ├── app.js                        # Express 앱 초기화, 미들웨어 등록, 라우터 마운트, Swagger UI 서빙
+│   ├── server.js                     # HTTP 서버 진입점, 포트 바인딩, 스케줄러 시작, graceful shutdown
 │   ├── config/
-│   │   ├── env.ts                    # 환경 변수 로드 및 필수 변수 존재 여부 시작 시 검증
-│   │   └── database.ts               # pg.Pool 싱글톤 인스턴스 생성 및 내보내기
+│   │   ├── env.js                    # 환경 변수 로드 및 필수 변수 존재 여부 시작 시 검증
+│   │   ├── database.js               # pg.Pool 싱글톤 인스턴스 생성 및 내보내기
+│   │   └── swagger.js                # swagger-jsdoc 설정, swaggerSpec 내보내기
 │   ├── middlewares/
-│   │   ├── auth.middleware.ts        # JWT 액세스 토큰 검증, req.user에 사용자 정보 주입
-│   │   ├── error.middleware.ts       # 전역 에러 핸들러, 에러 유형별 HTTP 상태 코드 매핑
-│   │   └── validate.middleware.ts    # 요청 바디/파라미터 스키마 검증 (Joi 또는 Zod 활용)
+│   │   ├── auth.middleware.js        # JWT 액세스 토큰 검증, req.user에 사용자 정보 주입
+│   │   ├── error.middleware.js       # 전역 에러 핸들러, AppError 서브클래스별 HTTP 상태 코드 매핑
+│   │   └── validate.middleware.js    # 요청 바디/파라미터 Zod 스키마 검증
 │   ├── modules/
 │   │   ├── auth/
-│   │   │   ├── auth.router.ts        # POST /auth/register, /login, /logout, /refresh 등 라우트 정의
-│   │   │   ├── auth.controller.ts    # 인증 요청/응답 처리, 토큰 발급 응답
-│   │   │   ├── auth.service.ts       # 로그인 검증, JWT 생성·갱신·무효화, 비밀번호 재설정 로직
-│   │   │   └── auth.types.ts         # LoginRequest, TokenPayload, AuthTokens 등 타입 정의
+│   │   │   ├── auth.router.js        # POST /auth/register, /login, /logout, /refresh 등 (@swagger JSDoc 포함)
+│   │   │   ├── auth.controller.js    # 인증 요청/응답 처리, 토큰 발급 응답
+│   │   │   └── auth.service.js       # 로그인 검증, JWT 생성·갱신·무효화, 비밀번호 재설정, 기본 카테고리 생성
 │   │   ├── user/
-│   │   │   ├── user.router.ts        # GET/PATCH /users/me, DELETE /users/me 라우트 정의
-│   │   │   ├── user.controller.ts    # 사용자 정보 조회·수정·탈퇴 요청/응답 처리
-│   │   │   ├── user.service.ts       # USR-001~003 규칙 구현, bcrypt 해싱, 탈퇴 시 하드 삭제
-│   │   │   ├── user.repository.ts    # users 테이블 CRUD 쿼리
-│   │   │   └── user.types.ts         # User, CreateUserRequest, UpdateUserRequest 등 타입 정의
+│   │   │   ├── user.router.js        # GET/PATCH/DELETE /users/me 라우트 정의 (@swagger JSDoc 포함)
+│   │   │   ├── user.controller.js    # 사용자 정보 조회·수정·탈퇴 요청/응답 처리
+│   │   │   └── user.service.js       # USR-001~003 규칙, bcrypt 해싱, 탈퇴 시 하드 삭제, 감사 로그
 │   │   ├── todo/
-│   │   │   ├── todo.router.ts        # /todos, /todos/:id, /todos/:id/status 등 라우트 정의
-│   │   │   ├── todo.controller.ts    # 할일 CRUD, 상태 변경, 오늘/이번주 조회 요청/응답 처리
-│   │   │   ├── todo.service.ts       # TODO-001~010 규칙 구현, 상태 전이 매트릭스 검증, KST 날짜 계산
-│   │   │   ├── todo.repository.ts    # todos 테이블 CRUD, 날짜 범위 조회, 검색·필터 쿼리
-│   │   │   └── todo.types.ts         # Todo, TodoStatus, CreateTodoRequest, UpdateTodoRequest 등
+│   │   │   ├── todo.router.js        # /todos, /todos/today, /todos/this-week, /todos/:id 라우트 (@swagger 포함)
+│   │   │   ├── todo.controller.js    # 할일 CRUD, 상태 변경, 오늘/이번주 조회 요청/응답 처리
+│   │   │   └── todo.service.js       # TODO-001~010 규칙, 상태 전이 매트릭스 검증, KST 날짜 계산, 감사 로그
 │   │   ├── category/
-│   │   │   ├── category.router.ts    # /categories 라우트 정의
-│   │   │   ├── category.controller.ts
-│   │   │   ├── category.service.ts   # CAT-001~004 규칙 구현, 삭제 시 category_id NULL 처리
-│   │   │   ├── category.repository.ts # categories 테이블 CRUD, 소유자 기반 조회
-│   │   │   └── category.types.ts     # Category, OwnerType, CreateCategoryRequest 등
+│   │   │   ├── category.router.js    # /categories, /categories/:id 라우트 정의 (@swagger JSDoc 포함)
+│   │   │   ├── category.controller.js
+│   │   │   └── category.service.js   # CAT-001~004 규칙, polymorphic owner 검증, 감사 로그
 │   │   ├── team/
-│   │   │   ├── team.router.ts        # /teams, /teams/:teamId, /teams/:teamId/members 등
-│   │   │   ├── team.controller.ts
-│   │   │   ├── team.service.ts       # TEAM-001~005, INV-001~005 규칙 구현, ADMIN 최소 유지 검증
-│   │   │   ├── team.repository.ts    # teams, team_members, team_invitations 테이블 쿼리
-│   │   │   └── team.types.ts         # Team, TeamMember, TeamRole, TeamInvitation, InvitationStatus 등
+│   │   │   ├── team.router.js        # /teams, /teams/:teamId/members, /invitations 라우트 (@swagger 포함)
+│   │   │   │                         # default export: teamRouter (mounted at /api/teams)
+│   │   │   │                         # named export: invitationRouter (mounted at /api/invitations)
+│   │   │   ├── team.controller.js
+│   │   │   └── team.service.js       # TEAM-001~005, INV-001~005 규칙, 감사 로그, NOTIF-002 알림 발송
 │   │   ├── notification/
-│   │   │   ├── notification.router.ts  # /notifications, /notifications/:id/read 라우트
-│   │   │   ├── notification.controller.ts
-│   │   │   ├── notification.service.ts # NOTIF-001~003 규칙 구현, 알림 생성·읽음 처리
-│   │   │   ├── notification.repository.ts # notifications 테이블 CRUD
-│   │   │   └── notification.types.ts   # Notification, NotificationType 등
+│   │   │   ├── notification.router.js     # /notifications, /notifications/read-all, /notifications/:id/read
+│   │   │   ├── notification.controller.js
+│   │   │   ├── notification.service.js    # NOTIF-001~003 규칙, 알림 생성·단건·전체 읽음 처리
+│   │   │   └── notification.scheduler.js  # node-cron DUE_DATE_REMINDER 스케줄러 (KST 기준 매일 실행)
 │   │   └── audit/
-│   │       ├── audit.service.ts        # AUD-001~004 규칙 구현, 엔티티 변경 이력 기록
-│   │       ├── audit.repository.ts     # audit_logs 테이블 INSERT 쿼리
-│   │       └── audit.types.ts          # AuditLog, ChangeType, EntityType 등
-│   ├── shared/
-│   │   ├── types/
-│   │   │   ├── api.types.ts            # ApiResponse<T>, PaginatedResponse<T>, ErrorResponse 공통 타입
-│   │   │   └── pagination.types.ts     # Pagination, PaginationQuery 타입
-│   │   ├── utils/
-│   │   │   ├── dateUtils.ts            # KST 날짜 변환, 오늘/이번주 날짜 범위 계산 (TODO-009)
-│   │   │   ├── jwtUtils.ts             # JWT 생성·검증·파싱 유틸
-│   │   │   └── passwordUtils.ts        # bcrypt 해싱·비교 유틸
-│   │   └── errors/
-│   │       ├── AppError.ts             # 커스텀 에러 기본 클래스 (statusCode, code 포함)
-│   │       ├── NotFoundError.ts        # 404 Not Found
-│   │       ├── ForbiddenError.ts       # 403 Forbidden
-│   │       ├── UnauthorizedError.ts    # 401 Unauthorized
-│   │       ├── ConflictError.ts        # 409 Conflict
-│   │       └── UnprocessableError.ts   # 422 Unprocessable Entity (비즈니스 규칙 위반)
-│   └── db/
-│       └── seeds/                      # 개발·테스트용 시드 데이터 SQL
+│   │       └── audit.service.js           # AUD-001~004, 민감정보 sanitize, User DELETE 시 이메일·이름 마스킹
+│   └── shared/
+│       ├── utils/
+│       │   ├── dateUtils.js          # KST 날짜 변환, 오늘/이번주 날짜 범위 계산 (TODO-009)
+│       │   ├── jwtUtils.js           # JWT 생성·검증·파싱 유틸
+│       │   ├── passwordUtils.js      # bcrypt 해싱·비교 유틸
+│       │   └── logger.js             # Winston 로거 설정 (debug/info/warn/error)
+│       └── errors/
+│           └── index.js              # AppError (기본), NotFoundError(404), UnauthorizedError(401),
+│                                     # ForbiddenError(403), ConflictError(409), UnprocessableError(422)
 ├── tests/
-│   ├── unit/                           # Service 레이어 단위 테스트
-│   │   ├── todo/
-│   │   │   └── todoService.test.ts
-│   │   ├── team/
-│   │   │   └── teamService.test.ts
-│   │   └── ...
-│   └── integration/                    # Repository 레이어 실제 DB 연결 통합 테스트
+│   ├── setup.js                      # Jest 전역 설정 (dotenv 로드, 테스트 DB 연결)
+│   └── integration/                  # 실제 DB 연결 통합 테스트
+│       ├── auth/
+│       │   └── auth.test.js
+│       ├── user/
+│       │   └── user.test.js
 │       ├── todo/
-│       │   └── todoRepository.test.ts
-│       └── ...
-├── .env.example                        # 필요한 환경 변수 키 목록 (값 없이)
-├── package.json
-└── tsconfig.json
+│       │   └── todo.test.js
+│       ├── category/
+│       │   └── category.test.js
+│       ├── team/
+│       │   └── team.test.js
+│       ├── notification/
+│       │   └── notification.test.js
+│       ├── audit/
+│       │   └── audit.test.js
+│       └── swagger/
+│           └── swagger.test.js
+├── .env.example                      # 필요한 환경 변수 키 목록 (값 없이)
+├── jest.config.js                    # Jest 설정 (ESM 모드, 커버리지 임계값)
+└── package.json                      # "type": "module" — ESM 설정
 ```
 
 ### 주요 디렉토리/파일 역할 요약
 
 | 경로 | 역할 |
 |------|------|
-| `src/app.ts` | Express 앱 생성, 미들웨어 체인 구성, 모든 라우터 마운트 |
-| `src/server.ts` | `app.ts`에서 생성된 앱으로 HTTP 서버 시작, graceful shutdown 처리 |
-| `src/config/env.ts` | `dotenv` 로드, 필수 환경 변수 누락 시 시작 시점에 오류 발생 |
-| `src/config/database.ts` | `pg.Pool` 싱글톤 생성, 커넥션 풀 설정 |
-| `src/middlewares/auth.middleware.ts` | `Authorization: Bearer` 헤더에서 JWT 추출·검증, `req.user` 주입 |
-| `src/middlewares/error.middleware.ts` | Express 4단계 에러 핸들러, `AppError` 서브클래스별 HTTP 상태 코드 응답 |
-| `src/modules/{domain}/` | 각 도메인 모듈. router → controller → service → repository 레이어 응집 |
-| `src/shared/errors/` | HTTP 상태 코드별 커스텀 에러 클래스, Service에서 throw하여 에러 핸들러로 전파 |
-| `src/shared/utils/dateUtils.ts` | KST(UTC+9) 날짜 계산 유틸. `TODO-009` 준수를 위해 모든 날짜 관련 로직 집중 |
-| `src/db/seeds/` | 개발 환경 초기 데이터 및 테스트 픽스처 |
+| `src/app.js` | Express 앱 생성, 미들웨어 체인 구성, 모든 라우터 마운트, `/api-docs` Swagger UI 서빙 |
+| `src/server.js` | `app.js`에서 생성된 앱으로 HTTP 서버 시작, `startScheduler()` 호출, graceful shutdown |
+| `src/config/env.js` | `dotenv` 로드, 필수 환경 변수 누락 시 시작 시점에 오류 발생 |
+| `src/config/database.js` | `pg.Pool` 싱글톤 생성, 커넥션 풀 설정, 모든 모듈에서 import하여 사용 |
+| `src/config/swagger.js` | `swagger-jsdoc`으로 `swaggerSpec` 생성, 각 router의 `@swagger` JSDoc을 수집 |
+| `src/middlewares/auth.middleware.js` | `Authorization: Bearer` 헤더에서 JWT 추출·검증, `req.user` 주입 |
+| `src/middlewares/error.middleware.js` | Express 4단계 에러 핸들러, `AppError` 서브클래스별 HTTP 상태 코드 응답 |
+| `src/modules/{domain}/` | 각 도메인 모듈 (router, controller, service 응집) |
+| `src/modules/notification/notification.scheduler.js` | `node-cron`으로 매일 KST 09:00(UTC 00:00) 실행, 마감일 D-1 할일에 DUE_DATE_REMINDER 발송 |
+| `src/modules/audit/audit.service.js` | 모든 도메인 서비스에서 import하여 CUD 이벤트 기록, 민감정보 제외 |
+| `src/shared/errors/index.js` | HTTP 상태 코드별 커스텀 에러 클래스 통합 파일, Service에서 throw하여 에러 핸들러로 전파 |
+| `src/shared/utils/dateUtils.js` | KST(UTC+9) 날짜 계산 유틸, `TODO-009` 준수를 위해 날짜 로직 집중 관리 |
 
 ---
 
@@ -811,3 +824,4 @@ todolist-app/           # 루트 (모노레포 방식)
 | v1.0 | 2026-05-13 | Architect | 초안 작성 (도메인 정의서 v1.3, PRD v1.3 기반) |
 | v1.1 | 2026-05-13 | Reviewer | 기술 스택 일관성 검토 반영: 문서 상단에 기술 스택 버전 표(React 19, TanStack Query v5, PostgreSQL 17 등) 추가 |
 | v1.2 | 2026-05-13 | Reviewer | 확정된 기술 스택 전면 반영: 프론트엔드(Tailwind CSS v3, Axios 1.x, React Router v7, React Hook Form 7.x, Vitest+RTL, Zustand 5.x, Vite 6.x), 백엔드(Node.js 22 LTS, Express 5.x, pg 8.x, Zod 3.x, Winston 3.x, swagger-jsdoc 6.x, Jest+Supertest), 인프라(pnpm, Docker+docker-compose, Nodemailer+SMTP) 버전 명시. DB 마이그레이션 도구 제외. |
+| v1.3 | 2026-05-14 | Backend Developer | 백엔드 구현 결과 반영: 언어를 TypeScript → JavaScript (ESM)으로 수정. Repository 레이어 제거 (Service에서 pg.Pool 직접 사용). 백엔드 디렉토리 구조 전면 업데이트 (실제 파일 기준). 파일명 규칙 .ts → .js 수정. 테스트 구조 통합 테스트 중심으로 업데이트. PR 머지 조건 분리 (백엔드/프론트엔드). node-cron 스케줄러, swagger.js, errors/index.js 추가 반영. API 엔드포인트 목록 실제 구현 기준으로 갱신. |

@@ -40,5 +40,5 @@ Deliverables:
 Always prioritize user needs, maintain design consistency, and ensure accessibility.
 """
 
-model = "gpt-5.5"
+model = "gpt-5.4"
 model_reasoning_effort = "medium"

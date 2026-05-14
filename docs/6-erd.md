@@ -29,7 +29,7 @@ erDiagram
 
     todos {
         uuid        todo_id         PK  "할일 고유 식별자"
-        uuid        user_id         FK  "개인 소유자 또는 팀 할일 생성자 (nullable — 팀 탈퇴·삭제 시 NULL)"
+        uuid        user_id         FK  "개인 소유자 (nullable — 팀 할일은 생성 시부터 NULL)"
         uuid        team_id         FK  "소속 팀 (nullable — 개인 할일은 NULL)"
         uuid        category_id     FK  "카테고리 (nullable — 카테고리 삭제 시 NULL)"
         string      title               "할일 제목 (NOT NULL)"
@@ -74,7 +74,7 @@ erDiagram
         uuid        invited_by      FK  "초대한 사용자 users.user_id (NOT NULL)"
         string      role                "수락 시 부여 역할: MEMBER | VIEWER (NOT NULL)"
         string      status              "초대 상태: PENDING | ACCEPTED | DECLINED | EXPIRED (NOT NULL)"
-        timestamptz expires_at          "초대 만료 일시 (NOT NULL)"
+        timestamptz expires_at          "초대 만료 일시 (NOT NULL) — 생성일 + 7일"
         timestamptz created_at          "초대 생성 일시 (NOT NULL)"
         timestamptz responded_at        "수락 또는 거절 일시 (nullable)"
     }
@@ -190,7 +190,7 @@ erDiagram
 |------|------|
 | title | NOT NULL (TODO-001) |
 | status | NOT NULL, PLANNED \| IN_PROGRESS \| DONE \| ON_HOLD (TODO-003) |
-| user_id | nullable FK → users — 팀 탈퇴·삭제 시 NULL 가능 (TODO-010, TEAM-004) |
+| user_id | nullable FK → users — 개인 할일만 설정, 팀 할일은 생성 시부터 NULL (TODO-010) |
 | team_id | nullable FK → teams — 개인 할일은 NULL (TODO-010) |
 | category_id | nullable FK → categories — 카테고리 삭제 시 NULL (CAT-002) |
 
@@ -202,7 +202,7 @@ erDiagram
 - TODO-004: 삭제된 할일은 복구 불가(하드 삭제).
 - TODO-008: 진행 상태 전이는 허용된 경우만 가능하다. DONE → IN_PROGRESS 전이는 재개 상황에서 허용된다.
 - TODO-009: 날짜 조회(오늘·이번 주)는 KST(UTC+9) 기준으로 처리한다.
-- TODO-010: 개인 할일은 `user_id` 필수, `team_id = NULL`. 팀 할일은 `team_id` 필수, `user_id`는 생성자 참조(nullable).
+- TODO-010: 개인 할일은 `user_id` 필수, `team_id = NULL`. 팀 할일은 `team_id` 필수, `user_id = NULL` (생성 시부터).
 - TEAM-005: 팀 삭제 시 해당 팀의 모든 할일도 함께 삭제된다.
 
 **컬럼 설명**
@@ -409,7 +409,7 @@ erDiagram
 
 | 관계 | 카디널리티 | 설명 |
 |------|-----------|------|
-| users → todos (user_id) | 1 : 0..N | 한 사용자는 여러 개인 할일을 소유하거나 팀 할일 생성자로 참조된다. 팀 탈퇴·삭제 시 NULL (TODO-010, TEAM-004) |
+| users → todos (user_id) | 1 : 0..N | 한 사용자는 여러 개인 할일을 소유한다. 팀 할일은 생성 시부터 user_id = NULL (TODO-010, TEAM-004) |
 | teams → todos (team_id) | 1 : 0..N | 한 팀은 여러 팀 할일을 가진다. 팀 삭제 시 할일도 함께 삭제 (TEAM-005) |
 | categories → todos (category_id) | 0..1 : 0..N | 카테고리는 여러 할일을 분류한다. 카테고리 삭제 시 category_id = NULL (CAT-002) |
 | users → teams (created_by) | 1 : 0..N | 한 사용자는 여러 팀을 생성할 수 있다. 팀 생성자는 자동 ADMIN (TEAM-001) |
@@ -430,6 +430,7 @@ erDiagram
 | 버전 | 날짜       | 변경자           | 변경 내용                                                              |
 | ---- | ---------- | ---------------- | ---------------------------------------------------------------------- |
 | v1.0 | 2026-05-13 | Backend Developer | 초안 작성. docs/2-prd.md (v1.4), docs/1-domain-definition.md (v1.3), docs/5-arch-diagram.md (v1.0) 기반으로 전체 ERD 및 엔티티 설명 작성 |
+| v1.1 | 2026-05-14 | Backend Developer | 구현 결과 반영: todos.user_id 설명 수정 (팀 할일은 생성 시부터 NULL). team_invitations.expires_at에 7일 만료 정책 명시. |
 
 ---
 

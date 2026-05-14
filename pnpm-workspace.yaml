@@ -1,0 +1,7 @@
+packages:
+  - 'backend'
+  - 'frontend'
+
+allowBuilds:
+  '@scarf/scarf': true
+  esbuild: set this to true or false
