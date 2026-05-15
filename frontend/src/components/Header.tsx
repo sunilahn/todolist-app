@@ -1,20 +1,15 @@
 import { useNotifications } from '@/features/notification/hooks/useNotifications';
 import { useAuthStore } from '@/features/auth/stores/authStore';
+import { useLogout } from '@/features/auth/hooks/useLogout';
+import { Link } from 'react-router-dom';
 import { ROUTES } from '@/shared/constants/routes';
-import { Link, useNavigate } from 'react-router-dom';
 
 export function Header() {
-  const navigate = useNavigate();
   const { data: notifications = [] } = useNotifications();
   const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
+  const { logout } = useLogout();
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
-
-  const handleLogout = () => {
-    logout();
-    navigate(ROUTES.LOGIN);
-  };
 
   return (
     <header className="fixed top-0 left-0 right-0 h-header bg-white border-b border-neutral-200 z-[100] flex items-center justify-between px-6">
@@ -39,7 +34,7 @@ export function Header() {
         <div className="flex items-center gap-2 pl-2 border-l border-neutral-200">
           <span className="text-sm font-medium text-neutral-700">{user?.name || '사용자'}</span>
           <button
-            onClick={handleLogout}
+            onClick={logout}
             className="p-2 text-neutral-500 hover:bg-neutral-100 rounded-full transition-colors"
             title="로그아웃"
           >
