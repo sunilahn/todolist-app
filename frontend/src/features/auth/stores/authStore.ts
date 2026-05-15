@@ -1,11 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { UserProfile } from '@/features/user/api/user.api';
 
 interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
+  user: UserProfile | null;
   setTokens: (accessToken: string, refreshToken: string) => void;
   setAccessToken: (accessToken: string) => void;
+  setUser: (user: UserProfile) => void;
   clear: () => void;
 }
 
@@ -14,9 +17,11 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       accessToken: null,
       refreshToken: null,
+      user: null,
       setTokens: (accessToken, refreshToken) => set({ accessToken, refreshToken }),
       setAccessToken: (accessToken) => set({ accessToken }),
-      clear: () => set({ accessToken: null, refreshToken: null }),
+      setUser: (user) => set({ user }),
+      clear: () => set({ accessToken: null, refreshToken: null, user: null }),
     }),
     {
       name: 'auth-storage',
